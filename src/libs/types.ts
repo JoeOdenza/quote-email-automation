@@ -14,7 +14,7 @@ export type Incentive = {
 }
 
 export type QuoteLayer = {
-    price: number;
+    price: Quote;
     description: string;
     incentives: Incentive[];
     authformLink: string;
@@ -29,4 +29,9 @@ export type QuoteEmailData = {
     promo: QuoteLayer;
     upgrade: QuoteLayer;
     hailMary: QuoteLayer;
+}
+
+export type Quote = {
+    price: number;
+    currency: string;
 }

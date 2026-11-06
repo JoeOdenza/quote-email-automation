@@ -1,0 +1,1 @@
+ALTER TABLE `email` ADD `html` text NOT NULL;

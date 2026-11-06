@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793998846655,
+      "tag": "0000_smooth_viper",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793999387786,
+      "tag": "0001_outstanding_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793999388714,
+      "tag": "0002_seed_incentive_types",
+      "breakpoints": true
+    }
+  ]
+}

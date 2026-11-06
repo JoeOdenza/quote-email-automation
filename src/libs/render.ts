@@ -1,4 +1,4 @@
-import type { Agent, Incentive, QuoteEmailData, QuoteLayer } from "./types";
+import type { Agent, Incentive, QuoteEmailData, QuoteLayer, Quote } from "./types";
 
 const FONT = "font-family:Arial,Helvetica,sans-serif;";
 
@@ -38,8 +38,12 @@ function escMultiline(value: string): string {
 }
 
 // Currency is a guess (CAD) until we know what quotes are priced in.
-function formatPrice(price: number): string {
-    return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(price);
+function formatPrice(price: Quote): string {
+    const currencyType = price.currency == "USD" ? "en-US" : "en-CA"
+
+    const value = new Intl.NumberFormat(currencyType, { style: "currency", currency: price.currency}).format(price.price)
+
+    return `${value} ${price.currency}`
 }
 
 // The first line of a description is the card's title (usually the resort);
@@ -323,7 +327,7 @@ function footer(agent: Agent): string {
             <strong style="color:${COLORS.navy};">${esc(agent.phone)}</strong>.<br>
             <span style="color:${COLORS.muted};">${esc(agent.name)} · Odenza Vacations · Agent #${esc(agent.agentNum)}</span>
             <p style="margin:16px 0 0;font-size:11px;line-height:16px;color:${COLORS.muted};">
-                Prices are in Canadian dollars and subject to availability until reserved.
+                Placeholder for any footer information
             </p>
         </td>
     </tr>`;

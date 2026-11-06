@@ -1,0 +1,62 @@
+import "server-only";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { db } from ".";
+import { agent, email, guest, incentive, incentiveType, quoteLayer } from "./schema";
+import { quoteTypes } from "@/libs/tiers";
+
+// There's one agent until sign-in exists: the one saved on the settings page.
+export async function getAgent() {
+    const [row] = await db.select().from(agent).orderBy(asc(agent.id)).limit(1);
+    return row ?? null;
+}
+
+export async function listIncentiveTypes() {
+    return db.select().from(incentiveType).orderBy(asc(incentiveType.title));
+}
+
+export async function listEmails() {
+    return db
+        .select({
+            id: email.id,
+            createdAt: email.createdAt,
+            guestName: guest.guestName,
+            guestProfileNum: guest.guestProfileNum,
+        })
+        .from(email)
+        .innerJoin(guest, eq(email.guestId, guest.id))
+        .orderBy(desc(email.id));
+}
+
+export async function getEmail(id: number) {
+    const [row] = await db
+        .select({ email, guest })
+        .from(email)
+        .innerJoin(guest, eq(email.guestId, guest.id))
+        .where(eq(email.id, id));
+    if (!row) return null;
+
+    const layers = await db.select().from(quoteLayer).where(eq(quoteLayer.emailId, id));
+    const incentives = layers.length
+        ? await db
+              .select({
+                  code: incentive.incentiveCode,
+                  quoteLayerId: incentive.quoteLayerId,
+                  title: incentiveType.title,
+                  activatedAt: incentive.activatedAt,
+              })
+              .from(incentive)
+              .innerJoin(incentiveType, eq(incentive.incentiveTypeId, incentiveType.id))
+              .where(inArray(incentive.quoteLayerId, layers.map((l) => l.id)))
+        : [];
+
+    const order = (type: string) => quoteTypes.indexOf(type as (typeof quoteTypes)[number]);
+    return {
+        ...row,
+        layers: layers
+            .sort((a, b) => order(a.quoteType) - order(b.quoteType))
+            .map((layer) => ({
+                ...layer,
+                incentives: incentives.filter((i) => i.quoteLayerId === layer.id),
+            })),
+    };
+}
