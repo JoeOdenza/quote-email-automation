@@ -2,6 +2,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
+import sharp from "sharp";
 import { db } from "@/db";
 import { upload } from "@/db/schema";
 import { stripBasePath } from "./base-path";
@@ -37,7 +38,40 @@ function isOwnImage(url: URL): boolean {
     return url.origin === new URL(appUrl()).origin || ["localhost", "127.0.0.1"].includes(url.hostname);
 }
 
-async function loadImage(url: URL): Promise<Omit<InlineImage, "contentId"> | null> {
+// Images larger than this get shrunk before they're attached. Nothing in the
+// email shows wider than 720px, so 1440px (double, for sharp screens) is
+// plenty, and a full-size camera photo would otherwise blow the size limit.
+const MAX_IMAGE_WIDTH = 1440;
+const SHRINK_OVER_BYTES = 300 * 1024;
+
+type LoadedImage = Omit<InlineImage, "contentId">;
+
+// Shrinks and recompresses an oversized image; small ones pass through.
+// PNGs with transparency (logos, icons) stay PNG; everything else becomes JPEG.
+async function shrink(image: LoadedImage): Promise<LoadedImage> {
+    if (image.bytes.length <= SHRINK_OVER_BYTES || image.contentType === "image/gif") return image;
+    try {
+        const input = sharp(image.bytes).rotate();
+        const { hasAlpha } = await input.metadata();
+        const resized = input.resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true });
+        const base = image.name.replace(/\.[^.]+$/, "");
+        if (hasAlpha) {
+            const bytes = await resized.png({ compressionLevel: 9, palette: true }).toBuffer();
+            return { name: `${base}.png`, contentType: "image/png", bytes };
+        }
+        const bytes = await resized.flatten({ background: "#ffffff" }).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+        return { name: `${base}.jpg`, contentType: "image/jpeg", bytes };
+    } catch {
+        return image; // not readable by sharp; send as is
+    }
+}
+
+async function loadImage(url: URL): Promise<LoadedImage | null> {
+    const image = await readImage(url);
+    return image && shrink(image);
+}
+
+async function readImage(url: URL): Promise<LoadedImage | null> {
     const pathname = stripBasePath(url.pathname);
     const uploadId = pathname.match(/^\/uploads\/([\w-]+)$/)?.[1];
     if (uploadId) {

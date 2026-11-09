@@ -3,9 +3,12 @@ import type { Agent, Incentive, QuoteEmailData, QuoteLayer, Quote } from "./type
 
 const FONT = "font-family:Arial,Helvetica,sans-serif;";
 
-// The email is 600px wide; content sits inside 24px side padding.
-const EMAIL_WIDTH = 600;
-const GUTTER = 24;
+// The email is 720px wide; content sits inside 32px side padding. Wider than
+// the classic 600px so it fills more of a desktop reading pane. Classic
+// Outlook keeps it at exactly this width; other apps shrink it to fit phones
+// (see RESPONSIVE_CSS).
+export const EMAIL_WIDTH = 720;
+const GUTTER = 32;
 const CONTENT_WIDTH = EMAIL_WIDTH - GUTTER * 2;
 
 // Placeholder brand colours until Renato picks real ones.
@@ -19,6 +22,8 @@ const COLORS = {
     blue: "#0045a5",
     teal: "#0f766e",
     tealSoft: "#e6f4f2",
+    tealDeep: "#0b4f4a",
+    tealDark: "#083c38",
     gold: "#e0b13a",
     goldSoft: "#fdf6e3",
     paleBlue: "#f4f7fb",
@@ -93,7 +98,7 @@ type ButtonOptions = {
 };
 
 const BUTTON_PAD_Y = 14;
-const BUTTON_PAD_X = 28;
+const BUTTON_LINE = 20;
 const BUTTON_RADIUS = 6;
 const BUTTON_EDGE = 4;
 
@@ -104,13 +109,16 @@ function darken(hex: string, amount: number): string {
     return `#${[16, 8, 0].map((s) => channel(s).toString(16).padStart(2, "0")).join("")}`;
 }
 
-// A button that looks like a button everywhere. Browsers and most apps use
-// the padding on the link, which makes the whole button clickable. Classic
-// Outlook ignores padding on links but applies "mso-padding-alt" to the cell
-// (other clients ignore that property), so it still gets a solid block of the
-// button colour around the text. Outlook can't round the corners, so the
-// button gets a darker outline and a thick darker bottom edge, which Word
-// does draw. That gives it a raised look in every client.
+// A full-width button that looks like a button everywhere. Its height comes
+// from ordinary padding on the cell, which every client applies the same way:
+// - padding on the link is ignored by classic Outlook;
+// - Outlook-only cell padding (mso-padding-alt) became real padding when the
+//   email was forwarded from Outlook, doubling the button's height;
+// - a tall line height on the link puts all the extra space above the text
+//   in classic Outlook.
+// The link fills the button's width, so it's clickable across the middle.
+// Outlook can't round the corners, so the button gets a darker outline and a
+// thick darker bottom edge, which Word does draw, for a raised look.
 function button(url: string, label: string, options: ButtonOptions): string {
     const { background, color = "#ffffff", fontSize = 16 } = options;
     const outline = darken(background, 0.12);
@@ -118,8 +126,8 @@ function button(url: string, label: string, options: ButtonOptions): string {
     return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-            <td align="center" bgcolor="${background}" style="border:1px solid ${outline};border-bottom:${BUTTON_EDGE}px solid ${edge};border-radius:${BUTTON_RADIUS}px;mso-padding-alt:${BUTTON_PAD_Y}px ${BUTTON_PAD_X}px;">
-                <a href="${esc(url)}" style="display:block;padding:${BUTTON_PAD_Y}px ${BUTTON_PAD_X}px;${FONT}font-size:${fontSize}px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:${color};text-decoration:none;border-radius:${BUTTON_RADIUS}px;">${esc(label)}</a>
+            <td align="center" bgcolor="${background}" style="border:1px solid ${outline};border-bottom:${BUTTON_EDGE}px solid ${edge};border-radius:${BUTTON_RADIUS}px;padding:${BUTTON_PAD_Y}px 16px;">
+                <a href="${esc(url)}" style="display:block;${FONT}font-size:${fontSize}px;line-height:${BUTTON_LINE}px;mso-line-height-rule:exactly;font-weight:bold;color:${color};text-decoration:none;border-radius:${BUTTON_RADIUS}px;">${esc(label)}</a>
             </td>
         </tr>
     </table>`;
@@ -147,7 +155,7 @@ const LOGO_HEIGHT = 45;
 function header(agent: Agent, logoSrc: string): string {
     return `
     <tr>
-        <td bgcolor="${COLORS.navy}" style="padding:20px ${GUTTER}px;">
+        <td class="pad" bgcolor="${COLORS.navy}" style="padding:20px ${GUTTER}px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                     <td width="50%" valign="middle">
@@ -166,19 +174,24 @@ function header(agent: Agent, logoSrc: string): string {
     </tr>`;
 }
 
+// The banner's height. Uploaded banners are cropped to this shape (see
+// libs/images.ts), so changing it changes what new uploads are cropped to.
+// The default banner is a copy cropped to match (images/hero-banner.jpg).
+export const HERO_HEIGHT = 200;
+
 function intro(guestName: string, heroSrc: string | undefined): string {
     const hero = heroSrc
         ? `
     <tr>
         <td>
-            <img src="${esc(heroSrc)}" width="${EMAIL_WIDTH}" height="220" alt="" style="display:block;border:0;width:${EMAIL_WIDTH}px;height:220px;object-fit:cover;">
+            <img class="fluid-img" src="${esc(heroSrc)}" width="${EMAIL_WIDTH}" height="${HERO_HEIGHT}" alt="" style="display:block;border:0;width:${EMAIL_WIDTH}px;height:${HERO_HEIGHT}px;object-fit:cover;">
         </td>
     </tr>`
         : "";
 
     return `${hero}
     <tr>
-        <td style="padding:32px ${GUTTER}px 8px;${FONT}color:${COLORS.text};">
+        <td class="pad" style="padding:32px ${GUTTER}px 8px;${FONT}color:${COLORS.text};">
             <h1 style="margin:0 0 12px;font-size:24px;line-height:30px;color:${COLORS.navy};">Hi ${esc(firstName(guestName))},</h1>
             <p style="margin:0;font-size:15px;line-height:24px;color:${COLORS.text};">
                 Thanks for talking with me about your next getaway. Below is the quote we discussed,
@@ -245,9 +258,17 @@ type CardStyle = {
     buttonColor: string;
     buttonSize: number;
     incentives: IncentiveStyle;
+    // Optional extras that make a card stand out (used by the upgrade).
+    ribbon?: { label: string; background: string; color: string };
+    priceBackground?: string;
+    shadow?: string;
+    // Colour of the line under the price (defaults to the badge colour).
+    priceNoteColor?: string;
 };
 
-function quoteCard(quote: QuoteLayer, style: CardStyle): string {
+// `priceNote` is an optional line under the price, e.g. how much more than
+// the original quote this one is.
+function quoteCard(quote: QuoteLayer, style: CardStyle, priceNote?: string): string {
     const title = quote.title.trim();
     const imageWidth = CONTENT_WIDTH - style.borderWidth * 2;
 
@@ -255,7 +276,7 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
         ? `
                 <tr>
                     <td>
-                        <img src="${esc(quote.imageUrl)}" width="${imageWidth}" height="${style.imageHeight}" alt="${esc(title)}" style="display:block;border:0;width:${imageWidth}px;height:${style.imageHeight}px;object-fit:cover;">
+                        <img class="fluid-img" src="${esc(quote.imageUrl)}" width="${imageWidth}" height="${style.imageHeight}" alt="${esc(title)}" style="display:block;border:0;width:${imageWidth}px;height:${style.imageHeight}px;object-fit:cover;">
                     </td>
                 </tr>`
         : "";
@@ -267,10 +288,49 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
         ? `<p style="margin:0;font-size:14px;line-height:22px;color:${style.mutedColor};">${escMultiline(quote.description.trim())}</p>`
         : "";
 
+    // A full-width band across the top of the card, e.g. "Most popular".
+    const ribbon = style.ribbon
+        ? `
+                <tr>
+                    <td align="center" bgcolor="${style.ribbon.background}" style="padding:10px 16px;${FONT}font-size:13px;line-height:18px;mso-line-height-rule:exactly;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:${style.ribbon.color};">${esc(style.ribbon.label)}</td>
+                </tr>`
+        : "";
+
+    // The price sits on its own tinted panel when the style asks for one. The
+    // space above it is padding on the outer cell rather than a vSpace, since
+    // classic Outlook leaves a white seam between a spacer and the table after
+    // it (visible on dark cards).
+    const panel = style.priceBackground;
+    const price = `
+                                    <span style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${style.mutedColor};">Total for your stay</span><br>
+                                    <span style="font-size:${style.priceSize}px;line-height:1.2;font-weight:bold;color:${style.titleColor};">${esc(formatPrice(quote.price))}</span>${
+                                        priceNote
+                                            ? `<br><span style="font-size:14px;line-height:22px;font-weight:bold;color:${style.priceNoteColor ?? style.badgeColor};">${esc(priceNote)}</span>`
+                                            : ""
+                                    }`;
+    const priceBlock = `
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}">
+                            <tr>
+                                <td valign="bottom" bgcolor="${style.background}" style="padding-top:20px;${FONT}">${
+                                    panel
+                                        ? `
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td bgcolor="${panel}" style="padding:16px 18px;border-radius:8px;${FONT}">${price}
+                                            </td>
+                                        </tr>
+                                    </table>`
+                                        : price
+                                }
+                                </td>
+                            </tr>
+                        </table>`;
+
     return `
     <tr>
-        <td style="padding:0 ${GUTTER}px;">
-            <table role="presentation" width="${CONTENT_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="width:${CONTENT_WIDTH}px;border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;overflow:hidden;">
+        <td class="pad" style="padding:0 ${GUTTER}px;">
+            <table class="fluid" role="presentation" width="${CONTENT_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="width:${CONTENT_WIDTH}px;border:${style.borderWidth}px solid ${style.borderColor};border-radius:12px;border-collapse:separate;overflow:hidden;${style.shadow ? `box-shadow:${style.shadow};` : ""}">
+                ${ribbon}
                 ${image}
                 <tr>
                     <td bgcolor="${style.background}" style="padding:24px;${FONT}color:${style.textColor};">
@@ -278,14 +338,7 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
                         <h2 style="margin:14px 0 6px;font-size:${style.titleSize}px;line-height:1.25;color:${style.titleColor};">${esc(title)}</h2>
                         ${duration}
                         ${description}
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}">
-                            <tr>
-                                <td valign="bottom" bgcolor="${style.background}" style="padding-top:20px;${FONT}">
-                                    <span style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${style.mutedColor};">Total for your stay</span><br>
-                                    <span style="font-size:${style.priceSize}px;line-height:1.2;font-weight:bold;color:${style.titleColor};">${esc(formatPrice(quote.price))}</span>
-                                </td>
-                            </tr>
-                        </table>
+                        ${priceBlock}
                         ${vSpace(16, style.background)}
                         ${button(quote.authformLink, style.buttonLabel, {
                             background: style.buttonBackground,
@@ -301,6 +354,11 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
 }
 
 // Keyed like QuoteEmailData: promo, upgrade, hailMary.
+//
+// The upgrade (middle) is the one we most want guests to pick, so it gets the
+// most attention: a "most popular" ribbon, the thickest border, the biggest
+// image, price and button, a tinted price panel and a shadow. The other two
+// are deliberately quieter so it stands out between them.
 const CARD_STYLES = {
     promo: {
         badge: "Your quote",
@@ -314,50 +372,55 @@ const CARD_STYLES = {
         mutedColor: COLORS.muted,
         titleSize: 20,
         priceSize: 26,
-        imageHeight: 180,
+        imageHeight: 200,
         buttonLabel: "Reserve this offer",
         buttonBackground: COLORS.blue,
         buttonColor: "#ffffff",
         buttonSize: 16,
         incentives: { background: COLORS.paleBlue, titleColor: COLORS.navy, textColor: COLORS.text },
     },
+    // A deep teal card with gold accents: the only shaded card in the email.
     upgrade: {
-        badge: "Recommended upgrade",
+        badge: "Recommended for you",
         badgeBackground: COLORS.tealSoft,
         badgeColor: COLORS.teal,
+        background: COLORS.tealDeep,
+        borderColor: COLORS.gold,
+        borderWidth: 3,
+        titleColor: "#ffffff",
+        textColor: "#ffffff",
+        mutedColor: "#b9ded9",
+        titleSize: 26,
+        priceSize: 36,
+        imageHeight: 240,
+        buttonLabel: "Reserve the upgrade",
+        buttonBackground: COLORS.gold,
+        buttonColor: COLORS.navy,
+        buttonSize: 18,
+        incentives: { background: COLORS.tealDark, titleColor: COLORS.gold, textColor: "#ffffff" },
+        ribbon: { label: "★ Most popular choice ★", background: COLORS.gold, color: COLORS.navy },
+        priceBackground: COLORS.tealDark,
+        priceNoteColor: COLORS.gold,
+        shadow: "0 12px 32px rgba(11,79,74,0.35)",
+    },
+    hailMary: {
+        badge: "Premium option",
+        badgeBackground: COLORS.goldSoft,
+        badgeColor: "#8a6a12",
         background: "#ffffff",
-        borderColor: COLORS.teal,
+        borderColor: COLORS.navy,
         borderWidth: 2,
         titleColor: COLORS.navy,
         textColor: COLORS.text,
         mutedColor: COLORS.muted,
         titleSize: 22,
         priceSize: 28,
-        imageHeight: 200,
-        buttonLabel: "Reserve the upgrade",
-        buttonBackground: COLORS.teal,
+        imageHeight: 220,
+        buttonLabel: "Reserve the ultimate getaway",
+        buttonBackground: COLORS.navy,
         buttonColor: "#ffffff",
         buttonSize: 16,
-        incentives: { background: COLORS.tealSoft, titleColor: COLORS.teal, textColor: COLORS.text },
-    },
-    hailMary: {
-        badge: "★ Our best offer",
-        badgeBackground: COLORS.gold,
-        badgeColor: COLORS.navy,
-        background: COLORS.navy,
-        borderColor: COLORS.gold,
-        borderWidth: 3,
-        titleColor: "#ffffff",
-        textColor: "#ffffff",
-        mutedColor: COLORS.navySoft,
-        titleSize: 26,
-        priceSize: 34,
-        imageHeight: 240,
-        buttonLabel: "Reserve the ultimate getaway",
-        buttonBackground: COLORS.gold,
-        buttonColor: COLORS.navy,
-        buttonSize: 18,
-        incentives: { background: "#1d3d61", titleColor: COLORS.gold, textColor: "#ffffff" },
+        incentives: { background: COLORS.goldSoft, titleColor: COLORS.navy, textColor: COLORS.text },
     },
 } satisfies Record<string, CardStyle>;
 
@@ -404,6 +467,23 @@ function footer(agent: Agent): string {
     </tr>`;
 }
 
+// "Just $350.00 USD more than your original quote", when the upgrade is in
+// the same currency and costs more. Shown on the upgrade card.
+function upgradeNote(promo: Quote, upgrade: Quote): string | undefined {
+    if (promo.currency !== upgrade.currency) return undefined;
+    const difference = Math.round((upgrade.price - promo.price) * 100) / 100;
+    if (difference <= 0) return undefined;
+    return `Just ${formatPrice({ ...upgrade, price: difference })} more than your original quote`;
+}
+
+// On phones, apps that support it shrink the fixed-width layout to the
+// screen. Classic Outlook ignores this and keeps the fixed widths.
+const RESPONSIVE_CSS = `
+            @media only screen and (max-width: ${EMAIL_WIDTH + 20}px) {
+                .container, .fluid, .fluid-img { width: 100% !important; }
+                .pad { padding-left: 16px !important; padding-right: 16px !important; }
+            }`;
+
 export function renderQuoteEmail(
     data: QuoteEmailData,
     options: { logoSrc: string; heroSrc?: string; baseUrl?: string },
@@ -426,18 +506,20 @@ export function renderQuoteEmail(
             </o:OfficeDocumentSettings>
         </xml>
         <![endif]-->
+        <style>${RESPONSIVE_CSS}
+        </style>
     </head>
     <body style="margin:0;padding:0;background-color:${COLORS.page};">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${COLORS.page}">
             <tr>
                 <td align="center" style="padding:24px 0;">
-                    <table role="presentation" width="${EMAIL_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:${EMAIL_WIDTH}px;">
+                    <table class="container" role="presentation" width="${EMAIL_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:${EMAIL_WIDTH}px;">
                         ${header(data.agent, logoSrc)}
                         ${intro(data.guestName, heroSrc)}
                         ${spacer(24)}
                         ${quoteCard(data.promo, CARD_STYLES.promo)}
                         ${spacer(24)}
-                        ${quoteCard(data.upgrade, CARD_STYLES.upgrade)}
+                        ${quoteCard(data.upgrade, CARD_STYLES.upgrade, upgradeNote(data.promo.price, data.upgrade.price))}
                         ${spacer(24)}
                         ${quoteCard(data.hailMary, CARD_STYLES.hailMary)}
                         ${spacer(32)}

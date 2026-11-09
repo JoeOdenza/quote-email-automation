@@ -1,18 +1,19 @@
 import "server-only";
 import sharp from "sharp";
 import { ICON_SIZE } from "./incentives";
+import { EMAIL_WIDTH, HERO_HEIGHT } from "./render";
 
 // Uploaded images are reshaped here, on the server, because email clients
 // like Outlook ignore CSS cropping: each image has to arrive at exactly the
 // size and shape it's shown at. Each function returns null if the file isn't
 // a readable image.
 
-// The banner shows at 600 × 220 in the email; it's stored at twice that so
-// it stays sharp on high-density screens.
-export const BANNER_WIDTH = 1200;
-export const BANNER_HEIGHT = 440;
+// The banner is stored at twice the size it shows at in the email (720 × 200),
+// so it stays sharp on high-density screens.
+export const BANNER_WIDTH = EMAIL_WIDTH * 2;
+export const BANNER_HEIGHT = HERO_HEIGHT * 2;
 
-// Turns an uploaded photo into a 1200 × 440 JPEG.
+// Turns an uploaded photo into a 1440 × 400 JPEG.
 export async function prepareBanner(file: File): Promise<Buffer | null> {
     try {
         return await sharp(Buffer.from(await file.arrayBuffer()))

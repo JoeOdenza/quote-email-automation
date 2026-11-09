@@ -59,7 +59,7 @@ export const sampleQuoteEmail: QuoteEmailData = {
         description: "Studio with a king bed",
         incentives: [],
         authformLink: "https://example.com/auth/promo",
-        imageUrl: "/images/promo.jpg",
+        imageUrl: "/images/himalayas-promo-card.jpg",
     },
     upgrade: {
         price: upgradeQuote,
@@ -68,7 +68,7 @@ export const sampleQuoteEmail: QuoteEmailData = {
         description: "1-bedroom ocean view suite",
         incentives: [incentives.travel],
         authformLink: "https://example.com/auth/upgrade",
-        imageUrl: "/images/upgrade.jpg",
+        imageUrl: "/images/himalayas-upgrade-card.jpg",
     },
     hailMary: {
         price: hailMaryQuote,
@@ -77,8 +77,8 @@ export const sampleQuoteEmail: QuoteEmailData = {
         description: "2-bedroom presidential suite",
         incentives: [incentives.travel, incentives.hotel, incentives.event],
         authformLink: "https://example.com/auth/hail-mary",
-        imageUrl: "/images/hailmary.jpg",
+        imageUrl: "/images/himalayas-hailmary-card.jpg",
     },
 };
 
-export const sampleHeroSrc = "/images/hero.jpg";
+export const sampleHeroSrc = "/images/hero-banner.jpg";

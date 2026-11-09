@@ -66,7 +66,7 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
             <Section title="Banner image">
                 <Field
                     label="Top banner"
-                    hint="Optional. JPG, PNG, GIF or WebP up to 5MB. It's cropped to fit the 1200 × 440 banner automatically, so wide photos work best. Leave empty to use the default banner."
+                    hint="Optional. JPG, PNG, GIF or WebP up to 5MB. It's cropped to fit the wide, short banner (1440 × 400) automatically, so wide photos work best. Leave empty to use the default banner."
                 >
                     <input
                         name="heroImage"

@@ -15,15 +15,15 @@ export type Currency = (typeof currencies)[number];
 // Placeholders for the parts of a quote the form doesn't ask for yet.
 export const tierPlaceholders: Record<QuoteType, { imageSrc: string; authFormLink: string }> = {
     promo: {
-        imageSrc: "/images/promo.jpg",
+        imageSrc: "/images/himalayas-promo-card.jpg",
         authFormLink: "https://example.com/auth/promo",
     },
     upgrade: {
-        imageSrc: "/images/upgrade.jpg",
+        imageSrc: "/images/himalayas-upgrade-card.jpg",
         authFormLink: "https://example.com/auth/upgrade",
     },
     hailMary: {
-        imageSrc: "/images/hailmary.jpg",
+        imageSrc: "/images/himalayas-hailmary-card.jpg",
         authFormLink: "https://example.com/auth/hail-mary",
     },
 };
@@ -48,7 +48,7 @@ export const tierExamples: Record<QuoteType, { title: string; nights: string; de
 };
 
 // Used when no banner is uploaded.
-export const heroSrc = "/images/hero.jpg";
+export const heroSrc = "/images/hero-banner.jpg";
 export const logoSrc = "/OdenzaLogo.png";
 
 // Banner uploads: what the form accepts and how big they can be.
