@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { createQuoteEmail, type FormState } from "./actions";
 import { Field, FormMessage, Input, Section, inputClass, primaryButton } from "./ui/form";
-import { currencies, quoteTypes, tierLabels, type QuoteType } from "@/libs/tiers";
+import { currencies, heroImageTypes, quoteTypes, tierExamples, tierLabels, type QuoteType } from "@/libs/tiers";
 
-type IncentiveOption = { id: string; title: string; description: string | null };
+type IncentiveOption = { id: string; title: string; description: string | null; code: string | null };
 
 const tierHints: Record<QuoteType, string> = {
     promo: "The quote you discussed with the guest.",
@@ -50,10 +50,54 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                 </div>
             </Section>
 
+            <Section title="Banner image">
+                <Field
+                    label="Top banner"
+                    hint="Optional. JPG, PNG, GIF or WebP up to 5MB. It's cropped to fit the 1200 × 440 banner automatically, so wide photos work best. Leave empty to use the default banner."
+                >
+                    <input
+                        name="heroImage"
+                        type="file"
+                        accept={heroImageTypes.join(",")}
+                        className="text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-50"
+                    />
+                </Field>
+            </Section>
+
             <div className="grid gap-5 lg:grid-cols-3">
                 {quoteTypes.map((type) => (
                     <Section key={type} title={`${tierLabels[type]} quote`}>
                         <p className="-mt-2 mb-4 text-xs text-zinc-500">{tierHints[type]}</p>
+                        <div className="mb-4 flex flex-col gap-3">
+                            <Field label="Title">
+                                <Input
+                                    name={`${type}.title`}
+                                    required
+                                    autoComplete="off"
+                                    placeholder={tierExamples[type].title}
+                                    defaultValue={str(`${type}.title`)}
+                                />
+                            </Field>
+                            <Field label="Duration of stay">
+                                <Input
+                                    name={`${type}.duration`}
+                                    required
+                                    autoComplete="off"
+                                    placeholder={tierExamples[type].duration}
+                                    defaultValue={str(`${type}.duration`)}
+                                />
+                            </Field>
+                            <Field label="Accommodation description">
+                                <textarea
+                                    name={`${type}.description`}
+                                    required
+                                    rows={3}
+                                    placeholder={tierExamples[type].description}
+                                    defaultValue={str(`${type}.description`)}
+                                    className={inputClass}
+                                />
+                            </Field>
+                        </div>
                         <div className="grid grid-cols-[1fr_6rem] gap-3">
                             <Field label="Price">
                                 <Input
@@ -102,6 +146,9 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                                             />
                                             <span className="text-sm">
                                                 <span className="font-medium text-zinc-900">{incentive.title}</span>
+                                                {incentive.code && (
+                                                    <code className="ml-1.5 font-mono text-[11px] text-zinc-500">{incentive.code}</code>
+                                                )}
                                                 {incentive.description && (
                                                     <span className="block text-xs text-zinc-500">{incentive.description}</span>
                                                 )}

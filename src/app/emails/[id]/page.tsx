@@ -32,6 +32,8 @@ async function EmailDetail({ params }: { params: PageProps<"/emails/[id]">["para
                             <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                                 {tierLabels[layer.quoteType as QuoteType]}
                             </dt>
+                            {layer.title && <dd className="text-sm text-zinc-700">{layer.title}</dd>}
+                            {layer.duration && <dd className="text-xs text-zinc-500">{layer.duration}</dd>}
                             <dd className="text-sm font-medium text-zinc-900">
                                 {formatMoney(layer.priceCents, layer.currency)}
                             </dd>

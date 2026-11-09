@@ -1,17 +1,20 @@
 "use server";
 
-import { randomInt } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { randomInt, randomUUID } from "node:crypto";
+import { and, eq, inArray } from "drizzle-orm";
 import { refresh, revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getAgent } from "@/db/queries";
-import { agent, email, guest, incentive, incentiveType, quoteLayer } from "@/db/schema";
+import { agent, email, guest, incentive, incentiveType, quoteLayer, upload } from "@/db/schema";
+import { prepareBanner } from "@/libs/banner";
 import { renderQuoteEmail } from "@/libs/render";
 import {
     currencies,
-    heroSrc,
+    heroImageMaxBytes,
+    heroImageTypes,
+    heroSrc as defaultHeroSrc,
     logoSrc,
     quoteTypes,
     tierLabels,
@@ -32,7 +35,9 @@ function formValues(formData: FormData): Record<string, string | string[]> {
     const values: Record<string, string | string[]> = {};
     for (const key of new Set(formData.keys())) {
         if (key.startsWith("$ACTION")) continue;
-        const all = formData.getAll(key).map(String);
+        // Files can't be sent back to a file input, so they aren't kept.
+        const all = formData.getAll(key).filter((v) => typeof v === "string");
+        if (all.length === 0) continue;
         values[key] = key.endsWith(".incentives") ? all : all[0];
     }
     return values;
@@ -56,7 +61,20 @@ async function siteOrigin(): Promise<string> {
     return `${proto}://${host}`;
 }
 
-type TierInput = { priceCents: number; currency: Currency; incentiveIds: string[] };
+type TierInput = {
+    priceCents: number;
+    currency: Currency;
+    title: string;
+    duration: string;
+    description: string;
+    incentiveIds: string[];
+};
+
+// An empty file input still submits a nameless, empty File.
+function uploadedFile(formData: FormData, name: string): File | null {
+    const value = formData.get(name);
+    return value instanceof File && value.size > 0 ? value : null;
+}
 
 export async function createQuoteEmail(_prev: FormState, formData: FormData): Promise<FormState> {
     const values = formValues(formData);
@@ -72,6 +90,19 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
     if (!isEmail(guestEmail)) return fail("Enter a valid guest email.");
     if (!guestProfileNum) return fail("Enter the guest's profile number.");
 
+    const heroFile = uploadedFile(formData, "heroImage");
+    let heroImage: Buffer | null = null;
+    if (heroFile) {
+        if (!(heroImageTypes as readonly string[]).includes(heroFile.type)) {
+            return fail("The banner image must be a JPG, PNG, GIF or WebP. Choose the file again.");
+        }
+        if (heroFile.size > heroImageMaxBytes) {
+            return fail("The banner image must be 5MB or smaller. Choose a smaller file.");
+        }
+        heroImage = await prepareBanner(heroFile);
+        if (!heroImage) return fail("The banner image couldn't be read. Try a different file.");
+    }
+
     const tiers = {} as Record<QuoteType, TierInput>;
     for (const type of quoteTypes) {
         const label = tierLabels[type];
@@ -81,20 +112,38 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
         }
         const currency = text(formData, `${type}.currency`) as Currency;
         if (!currencies.includes(currency)) return fail(`Pick a currency for the ${label} quote.`);
+        const title = text(formData, `${type}.title`);
+        const duration = text(formData, `${type}.duration`);
+        const description = text(formData, `${type}.description`);
+        if (!title) return fail(`Enter a title for the ${label} quote.`);
+        if (!duration) return fail(`Enter the duration of stay for the ${label} quote.`);
+        if (!description) return fail(`Enter the accommodation description for the ${label} quote.`);
         const incentiveIds = [...new Set(formData.getAll(`${type}.incentives`).map(String))];
-        tiers[type] = { priceCents: Math.round(price * 100), currency, incentiveIds };
+        tiers[type] = {
+            priceCents: Math.round(price * 100),
+            currency,
+            title,
+            duration,
+            description,
+            incentiveIds,
+        };
     }
 
     const allIds = [...new Set(quoteTypes.flatMap((t) => tiers[t].incentiveIds))];
     const catalog = allIds.length
-        ? await db.select().from(incentiveType).where(inArray(incentiveType.id, allIds))
+        ? await db
+              .select()
+              .from(incentiveType)
+              .where(and(inArray(incentiveType.id, allIds), eq(incentiveType.active, true)))
         : [];
     if (catalog.length !== allIds.length) return fail("One of the selected incentives no longer exists.");
     const byId = new Map(catalog.map((c) => [c.id, c]));
 
     const layer = (type: QuoteType): QuoteLayer => ({
         price: { price: tiers[type].priceCents / 100, currency: tiers[type].currency },
-        description: tierPlaceholders[type].description,
+        title: tiers[type].title,
+        duration: tiers[type].duration,
+        description: tiers[type].description,
         authformLink: tierPlaceholders[type].authFormLink,
         imageUrl: tierPlaceholders[type].imageSrc,
         incentives: tiers[type].incentiveIds.map((id): Incentive => {
@@ -117,9 +166,15 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
         upgrade: layer("upgrade"),
         hailMary: layer("hailMary"),
     };
+    // The upload's id is picked up front so the email can link to it; the row
+    // itself is written in the same transaction as the email.
+    const heroUpload = heroImage && { id: randomUUID(), contentType: "image/jpeg", data: heroImage };
+    const heroSrc = heroUpload ? `/uploads/${heroUpload.id}` : defaultHeroSrc;
     const html = renderQuoteEmail(data, { logoSrc, heroSrc, baseUrl: await siteOrigin() });
 
     const emailId = await db.transaction(async (tx) => {
+        if (heroUpload) await tx.insert(upload).values(heroUpload);
+
         // Match on profile number so the same guest isn't stored twice.
         const [g] = await tx
             .insert(guest)
@@ -129,7 +184,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
 
         const [e] = await tx
             .insert(email)
-            .values({ guestId: g.id, agentId: currentAgent.id, html })
+            .values({ guestId: g.id, agentId: currentAgent.id, html, heroSrc })
             .returning({ id: email.id });
 
         for (const type of quoteTypes) {
@@ -141,7 +196,11 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
                     quoteType: type,
                     priceCents: t.priceCents,
                     currency: t.currency,
-                    ...tierPlaceholders[type],
+                    title: t.title,
+                    duration: t.duration,
+                    description: t.description,
+                    imageSrc: tierPlaceholders[type].imageSrc,
+                    authFormLink: tierPlaceholders[type].authFormLink,
                 })
                 .returning({ id: quoteLayer.id });
 

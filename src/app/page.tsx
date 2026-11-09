@@ -8,7 +8,7 @@ async function QuoteFormLoader() {
     const [incentives, agent] = await Promise.all([listIncentiveTypes(), getAgent()]);
     return (
         <QuoteForm
-            incentives={incentives.map(({ id, title, description }) => ({ id, title, description }))}
+            incentives={incentives.map(({ id, title, description, code }) => ({ id, title, description, code }))}
             hasAgent={agent !== null}
         />
     );

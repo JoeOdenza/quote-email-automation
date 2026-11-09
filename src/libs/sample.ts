@@ -7,23 +7,23 @@ const icon = (text: string, background = "e0b13a", color = "14304f") =>
     `https://placehold.co/88x88/${background}/${color}/png?font=roboto&text=${encodeURIComponent(text)}`;
 
 const incentives = {
-    dining: {
-        id: "dining",
-        title: "$100 dining credit",
-        description: "Use it at any restaurant on the resort.",
-        srcImg: icon("$100"),
+    travel: {
+        id: "travel",
+        title: "$150 future travel credit",
+        description: "Put it toward your next trip booked with Odenza.",
+        srcImg: icon("$150"),
     },
-    transfer: {
-        id: "transfer",
-        title: "Free airport transfer",
-        description: "Round trip, private car.",
-        srcImg: icon("Car"),
+    hotel: {
+        id: "hotel",
+        title: "$500 hotel credit",
+        description: "Use it at any Odenza partner hotel.",
+        srcImg: icon("$500"),
     },
-    spa: {
-        id: "spa",
-        title: "Couples spa treatment",
-        description: "60-minute massage for two.",
-        srcImg: icon("Spa"),
+    event: {
+        id: "event",
+        title: "Event tickets",
+        description: "Choose from a selection of sports and live event tickets.",
+        srcImg: icon("VIP"),
     },
 };
 
@@ -54,22 +54,28 @@ export const sampleQuoteEmail: QuoteEmailData = {
     },
     promo: {
         price: promoQuote,
-        description: "Ocean Breeze Resort & Spa, Cancún\n5 nights · Studio\nMar 12–17, 2027",
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "5 nights · Mar 12–17, 2027",
+        description: "Studio with a king bed",
         incentives: [],
         authformLink: "https://example.com/auth/promo",
         imageUrl: "/images/promo.jpg",
     },
     upgrade: {
         price: upgradeQuote,
-        description: "Ocean Breeze Resort & Spa, Cancún\n7 nights · 1-bedroom ocean view\nMar 12–19, 2027",
-        incentives: [incentives.dining],
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "7 nights · Mar 12–19, 2027",
+        description: "1-bedroom ocean view suite",
+        incentives: [incentives.travel],
         authformLink: "https://example.com/auth/upgrade",
         imageUrl: "/images/upgrade.jpg",
     },
     hailMary: {
         price: hailMaryQuote,
-        description: "Ocean Breeze Resort & Spa, Cancún\n7 nights · 2-bedroom presidential suite\nMar 12–19, 2027",
-        incentives: [incentives.dining, incentives.transfer, incentives.spa],
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "7 nights · Mar 12–19, 2027",
+        description: "2-bedroom presidential suite",
+        incentives: [incentives.travel, incentives.hotel, incentives.event],
         authformLink: "https://example.com/auth/hail-mary",
         imageUrl: "/images/hailmary.jpg",
     },

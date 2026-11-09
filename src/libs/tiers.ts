@@ -13,27 +13,44 @@ export const currencies = ["USD", "CAD"] as const;
 export type Currency = (typeof currencies)[number];
 
 // Placeholders for the parts of a quote the form doesn't ask for yet.
-// The first line of a description is the card's title.
-export const tierPlaceholders: Record<
-    QuoteType,
-    { description: string; imageSrc: string; authFormLink: string }
-> = {
+export const tierPlaceholders: Record<QuoteType, { imageSrc: string; authFormLink: string }> = {
     promo: {
-        description: "Ocean Breeze Resort & Spa, Cancún\n5 nights · Studio",
         imageSrc: "/images/promo.jpg",
         authFormLink: "https://example.com/auth/promo",
     },
     upgrade: {
-        description: "Ocean Breeze Resort & Spa, Cancún\n7 nights · 1-bedroom ocean view",
         imageSrc: "/images/upgrade.jpg",
         authFormLink: "https://example.com/auth/upgrade",
     },
     hailMary: {
-        description: "Ocean Breeze Resort & Spa, Cancún\n7 nights · 2-bedroom presidential suite",
         imageSrc: "/images/hailmary.jpg",
         authFormLink: "https://example.com/auth/hail-mary",
     },
 };
 
+// Example text shown in the empty quote fields.
+export const tierExamples: Record<QuoteType, { title: string; duration: string; description: string }> = {
+    promo: {
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "5 nights · Mar 12–17, 2027",
+        description: "Studio with a king bed",
+    },
+    upgrade: {
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "7 nights · Mar 12–19, 2027",
+        description: "1-bedroom ocean view suite",
+    },
+    hailMary: {
+        title: "Ocean Breeze Resort & Spa, Cancún",
+        duration: "7 nights · Mar 12–19, 2027",
+        description: "2-bedroom presidential suite",
+    },
+};
+
+// Used when no banner is uploaded.
 export const heroSrc = "/images/hero.jpg";
 export const logoSrc = "/OdenzaLogo.png";
+
+// Banner uploads: what the form accepts and how big they can be.
+export const heroImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+export const heroImageMaxBytes = 5 * 1024 * 1024;

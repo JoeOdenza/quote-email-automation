@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+    blob,
     check,
     index,
     integer,
@@ -55,6 +56,9 @@ export const email = sqliteTable(
         // The email exactly as generated (image URLs already absolute), so
         // later edits to agent settings don't change past emails.
         html: text("html").notNull(),
+        // The banner shown at the top of the email: an uploaded image
+        // ("/uploads/<id>") or the default one.
+        heroSrc: text("hero_src"),
         sentAt: integer("sent_at", { mode: "timestamp" }),
         // Set once the matching activity has been created in ClientBase.
         // Rows with sent_at set and this null still need syncing.
@@ -76,6 +80,9 @@ export const quoteLayer = sqliteTable(
         // Stored in cents: SQLite has no decimal type, and floats round.
         priceCents: integer("price_cents").notNull(),
         currency: text("currency").notNull(), // ISO 4217, e.g. 'USD'
+        title: text("title"),
+        duration: text("duration"),
+        // The accommodation description.
         description: text("description"),
         authFormLink: text("auth_form_link"),
         imageSrc: text("image_src"),
@@ -91,13 +98,27 @@ export const quoteLayer = sqliteTable(
     ],
 );
 
-// The catalog: one row per kind of incentive ('dining', 'transfer', ...).
+// Images uploaded from the app (e.g. email banners), served at /uploads/<id>.
+// Stored in the database so they keep working after a rebuild or redeploy.
+export const upload = sqliteTable("upload", {
+    id: text("id").primaryKey(),
+    contentType: text("content_type").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+    createdAt: createdAt(),
+});
+
+// The catalog: one row per kind of incentive ('travel', 'hotel', ...).
 export const incentiveType = sqliteTable("incentive_type", {
     id: text("id").primaryKey(),
     type: text("type"),
     title: text("title").notNull(),
     description: text("description"),
     srcImg: text("src_img"),
+    // Internal Odenza code, e.g. 'DCOGC'. Shown to agents, never in the email.
+    code: text("code"),
+    // Retired incentives stay in the table so past emails' records still
+    // resolve, but they're no longer offered on the form.
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
 });
 
 // One issued incentive with its own unique code.

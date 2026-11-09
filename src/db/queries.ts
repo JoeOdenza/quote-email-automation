@@ -10,8 +10,13 @@ export async function getAgent() {
     return row ?? null;
 }
 
+// The incentives agents can currently offer.
 export async function listIncentiveTypes() {
-    return db.select().from(incentiveType).orderBy(asc(incentiveType.title));
+    return db
+        .select()
+        .from(incentiveType)
+        .where(eq(incentiveType.active, true))
+        .orderBy(asc(incentiveType.title));
 }
 
 export async function listEmails() {

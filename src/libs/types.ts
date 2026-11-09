@@ -15,6 +15,11 @@ export type Incentive = {
 
 export type QuoteLayer = {
     price: Quote;
+    // Usually the resort, e.g. "Ocean Breeze Resort & Spa, Cancún".
+    title: string;
+    // Length and dates of the stay, e.g. "7 nights · Mar 12–19, 2027".
+    duration: string;
+    // The accommodation, e.g. "1-bedroom ocean view suite". May span lines.
     description: string;
     incentives: Incentive[];
     authformLink: string;

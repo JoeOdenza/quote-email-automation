@@ -46,13 +46,6 @@ function formatPrice(price: Quote): string {
     return `${value} ${price.currency}`
 }
 
-// The first line of a description is the card's title (usually the resort);
-// the rest are details (nights, room, dates).
-function splitDescription(description: string): { title: string; details: string[] } {
-    const lines = description.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    return { title: lines[0] ?? "", details: lines.slice(1) };
-}
-
 // Images can be given as site paths ("/images/promo.jpg"). An email needs full
 // URLs, since it's read outside the app, so they're resolved against baseUrl.
 function resolveImages(data: QuoteEmailData, baseUrl: string): QuoteEmailData {
@@ -206,7 +199,7 @@ type CardStyle = {
 };
 
 function quoteCard(quote: QuoteLayer, style: CardStyle): string {
-    const { title, details } = splitDescription(quote.description);
+    const title = quote.title.trim();
     const imageWidth = CONTENT_WIDTH - style.borderWidth * 2;
 
     const image = quote.imageUrl
@@ -218,7 +211,12 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
                 </tr>`
         : "";
 
-    const detailLines = details.map((line) => esc(line)).join("<br>");
+    const duration = quote.duration.trim()
+        ? `<p style="margin:0 0 6px;font-size:14px;line-height:22px;font-weight:bold;color:${style.textColor};">${esc(quote.duration.trim())}</p>`
+        : "";
+    const description = quote.description.trim()
+        ? `<p style="margin:0;font-size:14px;line-height:22px;color:${style.mutedColor};">${escMultiline(quote.description.trim())}</p>`
+        : "";
 
     return `
     <tr>
@@ -229,7 +227,9 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
                     <td style="padding:24px;${FONT}color:${style.textColor};">
                         ${badge(style.badge, style.badgeBackground, style.badgeColor)}
                         <h2 style="margin:14px 0 6px;font-size:${style.titleSize}px;line-height:1.25;color:${style.titleColor};">${esc(title)}</h2>
-                        <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:${style.mutedColor};">${detailLines}</p>
+                        ${duration}
+                        ${description}
+                        <div style="height:20px;line-height:20px;font-size:0;">&nbsp;</div>
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                             <tr>
                                 <td valign="bottom" style="${FONT}">

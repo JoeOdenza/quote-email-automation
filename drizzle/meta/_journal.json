@@ -22,6 +22,20 @@
       "when": 1793999388714,
       "tag": "0002_seed_incentive_types",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794003530830,
+      "tag": "0003_mature_psylocke",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794240018829,
+      "tag": "0004_cheerful_blur",
+      "breakpoints": true
     }
   ]
 }
