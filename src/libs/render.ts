@@ -59,30 +59,60 @@ function resolveImages(data: QuoteEmailData, baseUrl: string): QuoteEmailData {
 }
 
 // The subject line used when the email is saved to Outlook.
-export function quoteEmailSubject(guestName: string): string {
-    const name = firstName(guestName);
-    return name ? `${name}, your vacation options from Odenza` : "Your vacation options from Odenza";
-}
+export const QUOTE_EMAIL_SUBJECT = "Odenza Vacations: Your Travel Quotes";
 
 function firstName(fullName: string): string {
     return fullName.trim().split(/\s+/)[0] ?? "";
+}
+
+// Classic Outlook for Windows lays emails out with Word, which ignores
+// margins on tables, padding on links and rounded corners. The helpers below
+// avoid relying on those.
+
+// Vertical space that every client honours. Word ignores margins on tables
+// and squashes empty cells, so the cell gets an exact line height, and it's
+// painted the colour of whatever it sits on (Word otherwise shows it white).
+function vSpace(height: number, background: string): string {
+    return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td height="${height}" bgcolor="${background}" style="height:${height}px;font-size:${height}px;line-height:${height}px;mso-line-height-rule:exactly;">&nbsp;</td></tr>
+    </table>`;
 }
 
 type ButtonOptions = {
     background: string;
     color?: string;
     fontSize?: number;
-    fullWidth?: boolean;
 };
 
-// A link inside a table cell: Outlook drops padding on a styled <a> alone.
+const BUTTON_PAD_Y = 14;
+const BUTTON_PAD_X = 28;
+const BUTTON_RADIUS = 6;
+const BUTTON_EDGE = 4;
+
+// Darkens a #rrggbb colour by a fraction (0.2 = 20% darker).
+function darken(hex: string, amount: number): string {
+    const value = parseInt(hex.slice(1), 16);
+    const channel = (shift: number) => Math.round(((value >> shift) & 0xff) * (1 - amount));
+    return `#${[16, 8, 0].map((s) => channel(s).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// A button that looks like a button everywhere. Browsers and most apps use
+// the padding on the link, which makes the whole button clickable. Classic
+// Outlook ignores padding on links but applies "mso-padding-alt" to the cell
+// (other clients ignore that property), so it still gets a solid block of the
+// button colour around the text. Outlook can't round the corners, so the
+// button gets a darker outline and a thick darker bottom edge, which Word
+// does draw. That gives it a raised look in every client.
 function button(url: string, label: string, options: ButtonOptions): string {
-    const { background, color = "#ffffff", fontSize = 16, fullWidth = false } = options;
+    const { background, color = "#ffffff", fontSize = 16 } = options;
+    const outline = darken(background, 0.12);
+    const edge = darken(background, 0.3);
     return `
-    <table role="presentation" ${fullWidth ? 'width="100%"' : ""} cellpadding="0" cellspacing="0" border="0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-            <td align="center" bgcolor="${background}" style="border-radius:6px;">
-                <a href="${esc(url)}" style="display:${fullWidth ? "block" : "inline-block"};padding:14px 28px;${FONT}font-size:${fontSize}px;font-weight:bold;color:${color};text-decoration:none;border-radius:6px;">${esc(label)}</a>
+            <td align="center" bgcolor="${background}" style="border:1px solid ${outline};border-bottom:${BUTTON_EDGE}px solid ${edge};border-radius:${BUTTON_RADIUS}px;mso-padding-alt:${BUTTON_PAD_Y}px ${BUTTON_PAD_X}px;">
+                <a href="${esc(url)}" style="display:block;padding:${BUTTON_PAD_Y}px ${BUTTON_PAD_X}px;${FONT}font-size:${fontSize}px;line-height:20px;mso-line-height-rule:exactly;font-weight:bold;color:${color};text-decoration:none;border-radius:${BUTTON_RADIUS}px;">${esc(label)}</a>
             </td>
         </tr>
     </table>`;
@@ -153,7 +183,8 @@ type IncentiveStyle = {
     textColor: string;
 };
 
-function incentiveList(incentives: Incentive[], style: IncentiveStyle): string {
+// `background` is the colour of the card the list sits on (for the spacer above it).
+function incentiveList(incentives: Incentive[], style: IncentiveStyle, background: string): string {
     if (incentives.length === 0) return "";
 
     const rows = incentives
@@ -171,8 +202,8 @@ function incentiveList(incentives: Incentive[], style: IncentiveStyle): string {
         )
         .join("");
 
-    return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;">
+    return `${vSpace(20, background)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
             <td bgcolor="${style.background}" style="padding:12px 16px;border-radius:8px;">
                 <p style="margin:0 0 4px;${FONT}font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${style.titleColor};">Bonus incentives included</p>
@@ -230,28 +261,26 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
             <table role="presentation" width="${CONTENT_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="width:${CONTENT_WIDTH}px;border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;overflow:hidden;">
                 ${image}
                 <tr>
-                    <td style="padding:24px;${FONT}color:${style.textColor};">
+                    <td bgcolor="${style.background}" style="padding:24px;${FONT}color:${style.textColor};">
                         ${badge(style.badge, style.badgeBackground, style.badgeColor)}
                         <h2 style="margin:14px 0 6px;font-size:${style.titleSize}px;line-height:1.25;color:${style.titleColor};">${esc(title)}</h2>
                         ${duration}
                         ${description}
-                        <div style="height:20px;line-height:20px;font-size:0;">&nbsp;</div>
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}">
                             <tr>
-                                <td valign="bottom" style="${FONT}">
+                                <td valign="bottom" bgcolor="${style.background}" style="padding-top:20px;${FONT}">
                                     <span style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${style.mutedColor};">Total for your stay</span><br>
                                     <span style="font-size:${style.priceSize}px;line-height:1.2;font-weight:bold;color:${style.titleColor};">${esc(formatPrice(quote.price))}</span>
                                 </td>
                             </tr>
                         </table>
-                        <div style="height:16px;line-height:16px;font-size:0;">&nbsp;</div>
+                        ${vSpace(16, style.background)}
                         ${button(quote.authformLink, style.buttonLabel, {
                             background: style.buttonBackground,
                             color: style.buttonColor,
                             fontSize: style.buttonSize,
-                            fullWidth: true,
                         })}
-                        ${incentiveList(quote.incentives, style.incentives)}
+                        ${incentiveList(quote.incentives, style.incentives, style.background)}
                     </td>
                 </tr>
             </table>
@@ -333,7 +362,7 @@ export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier
             <p style="margin:0 0 6px;${FONT}font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${COLORS.muted};">${esc(labels[tier])} quote</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;margin-bottom:16px;">
                 <tr>
-                    <td style="padding:0 24px 20px;">${incentiveList([incentive], style.incentives)}</td>
+                    <td style="padding:0 24px 20px;">${incentiveList([incentive], style.incentives, style.background)}</td>
                 </tr>
             </table>`;
         })
@@ -374,10 +403,18 @@ export function renderQuoteEmail(
     if (baseUrl) data = resolveImages(data, baseUrl);
 
     return `<!DOCTYPE html>
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!--[if mso]>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:AllowPNG/>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+        <![endif]-->
     </head>
     <body style="margin:0;padding:0;background-color:${COLORS.page};">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${COLORS.page}">

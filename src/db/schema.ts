@@ -85,6 +85,11 @@ export const quoteLayer = sqliteTable(
         priceCents: integer("price_cents").notNull(),
         currency: text("currency").notNull(), // ISO 4217, e.g. 'USD'
         title: text("title"),
+        nights: integer("nights"),
+        // Calendar dates, "YYYY-MM-DD".
+        checkIn: text("check_in"),
+        checkOut: text("check_out"),
+        // The nights and dates as shown in the email, e.g. "5 nights · Mar 12–17, 2027".
         duration: text("duration"),
         // The accommodation description.
         description: text("description"),

@@ -29,20 +29,20 @@ export const tierPlaceholders: Record<QuoteType, { imageSrc: string; authFormLin
 };
 
 // Example text shown in the empty quote fields.
-export const tierExamples: Record<QuoteType, { title: string; duration: string; description: string }> = {
+export const tierExamples: Record<QuoteType, { title: string; nights: string; description: string }> = {
     promo: {
         title: "Ocean Breeze Resort & Spa, Cancún",
-        duration: "5 nights · Mar 12–17, 2027",
+        nights: "5",
         description: "Studio with a king bed",
     },
     upgrade: {
         title: "Ocean Breeze Resort & Spa, Cancún",
-        duration: "7 nights · Mar 12–19, 2027",
+        nights: "7",
         description: "1-bedroom ocean view suite",
     },
     hailMary: {
         title: "Ocean Breeze Resort & Spa, Cancún",
-        duration: "7 nights · Mar 12–19, 2027",
+        nights: "7",
         description: "2-bedroom presidential suite",
     },
 };

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { createQuoteEmail, type FormState } from "./actions";
 import { Field, FormMessage, Input, Section, inputClass, primaryButton } from "./ui/form";
+import { StayFields } from "./ui/stay-fields";
+import { PRICE_PATTERN, PROFILE_NUM_PATTERN } from "@/libs/validation";
 import { currencies, heroImageTypes, quoteTypes, tierExamples, tierLabels, type QuoteType } from "@/libs/tiers";
 
 type IncentiveOption = { id: string; title: string; description: string | null; code: string | null };
@@ -44,8 +46,19 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                     <Field label="Guest email">
                         <Input name="guestEmail" type="email" required autoComplete="off" defaultValue={str("guestEmail")} />
                     </Field>
-                    <Field label="Profile number" hint="From ClientBase">
-                        <Input name="guestProfileNum" required autoComplete="off" defaultValue={str("guestProfileNum")} />
+                    <Field label="Profile number" hint="6 digits, from ClientBase">
+                        <Input
+                            name="guestProfileNum"
+                            required
+                            autoComplete="off"
+                            inputMode="numeric"
+                            pattern={PROFILE_NUM_PATTERN}
+                            minLength={6}
+                            maxLength={6}
+                            title="Exactly 6 digits"
+                            placeholder="123456"
+                            defaultValue={str("guestProfileNum")}
+                        />
                     </Field>
                 </div>
             </Section>
@@ -78,15 +91,13 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                                     defaultValue={str(`${type}.title`)}
                                 />
                             </Field>
-                            <Field label="Duration of trip">
-                                <Input
-                                    name={`${type}.duration`}
-                                    required
-                                    autoComplete="off"
-                                    placeholder={tierExamples[type].duration}
-                                    defaultValue={str(`${type}.duration`)}
-                                />
-                            </Field>
+                            <StayFields
+                                name={type}
+                                nightsPlaceholder={tierExamples[type].nights}
+                                defaultNights={str(`${type}.nights`)}
+                                defaultCheckIn={str(`${type}.checkIn`)}
+                                defaultCheckOut={str(`${type}.checkOut`)}
+                            />
                             <Field label="Accommodation description">
                                 <textarea
                                     name={`${type}.description`}
@@ -102,12 +113,13 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                             <Field label="Price">
                                 <Input
                                     name={`${type}.price`}
-                                    type="number"
+                                    type="text"
                                     inputMode="decimal"
-                                    min="0"
-                                    step="0.01"
+                                    autoComplete="off"
+                                    pattern={PRICE_PATTERN}
+                                    title="A dollar amount with up to two decimals, e.g. 1299 or 1,299.50"
                                     required
-                                    placeholder="0.00"
+                                    placeholder="1,299.00"
                                     defaultValue={str(`${type}.price`)}
                                 />
                             </Field>

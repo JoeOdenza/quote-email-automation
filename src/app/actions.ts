@@ -19,7 +19,7 @@ import {
 } from "@/libs/incentives";
 import { EmailTooLargeError, inlineImages } from "@/libs/inline-images";
 import { createDraft, MicrosoftAuthError } from "@/libs/microsoft";
-import { quoteEmailSubject, renderQuoteEmail } from "@/libs/render";
+import { QUOTE_EMAIL_SUBJECT, renderQuoteEmail } from "@/libs/render";
 import { currentAccount, endSession, requireAccount } from "@/libs/session";
 import {
     currencies,
@@ -33,7 +33,9 @@ import {
     type Currency,
     type QuoteType,
 } from "@/libs/tiers";
+import { MAX_NIGHTS, formatStay, isIsoDate } from "@/libs/stay";
 import type { Incentive, QuoteEmailData, QuoteLayer } from "@/libs/types";
+import { isProfileNum, parsePriceCents } from "@/libs/validation";
 
 // Every action checks for a signed-in, allowed Microsoft account first.
 // Actions are reachable by anyone who can send a POST, so proxy.ts alone isn't enough.
@@ -76,6 +78,10 @@ type TierInput = {
     priceCents: number;
     currency: Currency;
     title: string;
+    nights: number;
+    checkIn: string;
+    checkOut: string;
+    // Nights and dates as shown in the email, e.g. "5 nights · Mar 12–17, 2027".
     duration: string;
     description: string;
     incentiveIds: string[];
@@ -100,7 +106,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
     const guestProfileNum = text(formData, "guestProfileNum");
     if (!guestName) return fail("Enter the guest's name.");
     if (!isEmail(guestEmail)) return fail("Enter a valid guest email.");
-    if (!guestProfileNum) return fail("Enter the guest's profile number.");
+    if (!isProfileNum(guestProfileNum)) return fail("The profile number must be exactly 6 digits.");
 
     const heroFile = uploadedFile(formData, "heroImage");
     let heroImage: Buffer | null = null;
@@ -118,24 +124,37 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
     const tiers = {} as Record<QuoteType, TierInput>;
     for (const type of quoteTypes) {
         const label = tierLabels[type];
-        const price = Number(text(formData, `${type}.price`));
-        if (!text(formData, `${type}.price`) || !Number.isFinite(price) || price < 0) {
-            return fail(`Enter a valid price for the ${label} quote.`);
+        const priceCents = parsePriceCents(text(formData, `${type}.price`));
+        if (priceCents === null) {
+            return fail(`Enter the ${label} price as a dollar amount, e.g. 1299 or 1,299.50 (up to two decimals).`);
         }
         const currency = text(formData, `${type}.currency`) as Currency;
         if (!currencies.includes(currency)) return fail(`Pick a currency for the ${label} quote.`);
         const title = text(formData, `${type}.title`);
-        const duration = text(formData, `${type}.duration`);
         const description = text(formData, `${type}.description`);
         if (!title) return fail(`Enter a title for the ${label} quote.`);
-        if (!duration) return fail(`Enter the duration of stay for the ${label} quote.`);
+
+        const nightsText = text(formData, `${type}.nights`);
+        const nights = Number(nightsText);
+        if (!/^\d+$/.test(nightsText) || nights < 1 || nights > MAX_NIGHTS) {
+            return fail(`Enter the number of nights for the ${label} quote (1–${MAX_NIGHTS}).`);
+        }
+        const checkIn = text(formData, `${type}.checkIn`);
+        const checkOut = text(formData, `${type}.checkOut`);
+        if (!isIsoDate(checkIn) || !isIsoDate(checkOut) || checkOut <= checkIn) {
+            return fail(`Pick the check-in and check-out dates for the ${label} quote.`);
+        }
         if (!description) return fail(`Enter the accommodation description for the ${label} quote.`);
+
         const incentiveIds = [...new Set(formData.getAll(`${type}.incentives`).map(String))];
         tiers[type] = {
-            priceCents: Math.round(price * 100),
+            priceCents,
             currency,
             title,
-            duration,
+            nights,
+            checkIn,
+            checkOut,
+            duration: formatStay(nights, checkIn, checkOut),
             description,
             incentiveIds,
         };
@@ -209,6 +228,9 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
                     priceCents: t.priceCents,
                     currency: t.currency,
                     title: t.title,
+                    nights: t.nights,
+                    checkIn: t.checkIn,
+                    checkOut: t.checkOut,
                     duration: t.duration,
                     description: t.description,
                     imageSrc: tierPlaceholders[type].imageSrc,
@@ -362,7 +384,7 @@ export async function createOutlookDraft(emailId: number): Promise<DraftState> {
         // Attach the app's images to the message so they show up for the guest.
         const { html, images } = await inlineImages(row.email.html);
         draft = await createDraft(account.id, {
-            subject: quoteEmailSubject(row.guest.guestName),
+            subject: QUOTE_EMAIL_SUBJECT,
             html,
             to: { address: row.guest.guestEmail, name: row.guest.guestName },
             images,
