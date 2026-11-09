@@ -78,7 +78,7 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                                     defaultValue={str(`${type}.title`)}
                                 />
                             </Field>
-                            <Field label="Duration of stay">
+                            <Field label="Duration of trip">
                                 <Input
                                     name={`${type}.duration`}
                                     required

@@ -2,16 +2,22 @@ import "server-only";
 import { asc, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from ".";
 import { agent, email, guest, incentive, incentiveType, quoteLayer } from "./schema";
+import { requireAccount } from "@/libs/session";
 import { quoteTypes } from "@/libs/tiers";
+
+// Every query checks for a signed-in, allowed Microsoft account first, so no
+// page or action can read data without one, whatever proxy.ts lets through.
 
 // There's one agent until sign-in exists: the one saved on the settings page.
 export async function getAgent() {
+    await requireAccount();
     const [row] = await db.select().from(agent).orderBy(asc(agent.id)).limit(1);
     return row ?? null;
 }
 
 // The incentives agents can currently offer.
 export async function listIncentiveTypes() {
+    await requireAccount();
     return db
         .select()
         .from(incentiveType)
@@ -20,6 +26,7 @@ export async function listIncentiveTypes() {
 }
 
 export async function listEmails() {
+    await requireAccount();
     return db
         .select({
             id: email.id,
@@ -33,6 +40,7 @@ export async function listEmails() {
 }
 
 export async function getEmail(id: number) {
+    await requireAccount();
     const [row] = await db
         .select({ email, guest })
         .from(email)
@@ -68,6 +76,7 @@ export async function getEmail(id: number) {
 
 // Every incentive, active first, with how many times each has been issued.
 export async function listAllIncentiveTypes() {
+    await requireAccount();
     return db
         .select({
             id: incentiveType.id,
@@ -86,6 +95,7 @@ export async function listAllIncentiveTypes() {
 
 // One incentive, with how many times it has been issued.
 export async function getIncentiveType(id: string) {
+    await requireAccount();
     const [row] = await db
         .select({
             id: incentiveType.id,

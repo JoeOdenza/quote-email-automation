@@ -64,6 +64,10 @@ export const email = sqliteTable(
         // Rows with sent_at set and this null still need syncing.
         clientbaseActivityId: text("clientbase_activity_id"),
         clientbaseSyncedAt: integer("clientbase_synced_at", { mode: "timestamp" }),
+        // The most recent draft made from this email in the agent's Outlook.
+        outlookDraftId: text("outlook_draft_id"),
+        outlookDraftLink: text("outlook_draft_link"),
+        outlookDraftAt: integer("outlook_draft_at", { mode: "timestamp" }),
         createdAt: createdAt(),
     },
     (t) => [index("email_guest_idx").on(t.guestId), index("email_agent_idx").on(t.agentId)],
@@ -135,4 +139,36 @@ export const incentive = sqliteTable(
         activatedAt: integer("activated_at", { mode: "timestamp" }),
     },
     (t) => [index("incentive_quote_layer_idx").on(t.quoteLayerId)],
+);
+
+// A Microsoft account that has signed in to the app. Tokens are encrypted
+// (see libs/crypto.ts) so a copy of the database alone can't read mail.
+export const microsoftAccount = sqliteTable("microsoft_account", {
+    // The Microsoft Graph user id.
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    accessToken: text("access_token").notNull(),
+    accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }).notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(unixepoch())`)
+        .$onUpdate(() => new Date()),
+});
+
+// A signed-in browser. The cookie holds a random token; only its SHA-256
+// hash is stored, so the table can't be used to hijack sessions.
+export const session = sqliteTable(
+    "session",
+    {
+        tokenHash: text("token_hash").primaryKey(),
+        accountId: text("account_id")
+            .notNull()
+            .references(() => microsoftAccount.id, { onDelete: "cascade" }),
+        expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+        createdAt: createdAt(),
+    },
+    (t) => [index("session_account_idx").on(t.accountId)],
 );

@@ -6,7 +6,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { getAgent } from "@/db/queries";
+import { getAgent, getEmail } from "@/db/queries";
 import { agent, email, guest, incentive, incentiveType, quoteLayer, upload } from "@/db/schema";
 import { prepareBanner, prepareIcon } from "@/libs/images";
 import {
@@ -17,7 +17,10 @@ import {
     iconMaxBytes,
     placeholderIcon,
 } from "@/libs/incentives";
-import { renderQuoteEmail } from "@/libs/render";
+import { EmailTooLargeError, inlineImages } from "@/libs/inline-images";
+import { createDraft, MicrosoftAuthError } from "@/libs/microsoft";
+import { quoteEmailSubject, renderQuoteEmail } from "@/libs/render";
+import { currentAccount, endSession, requireAccount } from "@/libs/session";
 import {
     currencies,
     heroImageMaxBytes,
@@ -32,8 +35,8 @@ import {
 } from "@/libs/tiers";
 import type { Incentive, QuoteEmailData, QuoteLayer } from "@/libs/types";
 
-// No sign-in yet: anyone who can reach the app can call these actions.
-// Add an auth check to each one before this is reachable outside your network.
+// Every action checks for a signed-in, allowed Microsoft account first.
+// Actions are reachable by anyone who can send a POST, so proxy.ts alone isn't enough.
 
 export type FormState = { error?: string; saved?: boolean; values?: Record<string, string | string[]> };
 
@@ -85,6 +88,7 @@ function uploadedFile(formData: FormData, name: string): File | null {
 }
 
 export async function createQuoteEmail(_prev: FormState, formData: FormData): Promise<FormState> {
+    await requireAccount();
     const values = formValues(formData);
     const fail = (error: string): FormState => ({ error, values });
 
@@ -230,6 +234,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
 }
 
 export async function saveAgent(_prev: FormState, formData: FormData): Promise<FormState> {
+    await requireAccount();
     const values = formValues(formData);
     const fields = {
         name: text(formData, "name"),
@@ -281,6 +286,7 @@ async function newIncentiveId(title: string): Promise<string> {
 // changes new emails: sent emails keep the wording they were sent with, and
 // a replaced icon is stored as a new file so sent emails keep showing the old one.
 export async function saveIncentive(_prev: FormState, formData: FormData): Promise<FormState> {
+    await requireAccount();
     const values = formValues(formData);
     const fail = (error: string): FormState => ({ error, values });
 
@@ -338,4 +344,50 @@ export async function saveIncentive(_prev: FormState, formData: FormData): Promi
     revalidatePath("/incentives", "layout");
     revalidatePath("/");
     redirect("/incentives");
+}
+
+export type DraftState = { error?: string; needsSignIn?: boolean };
+
+// Saves a generated email as a draft in the signed-in person's Outlook.
+// Bound to the email's id on the page: createOutlookDraft.bind(null, id).
+export async function createOutlookDraft(emailId: number): Promise<DraftState> {
+    const account = await currentAccount();
+    if (!account) return { error: "Sign in with Microsoft first.", needsSignIn: true };
+
+    const row = await getEmail(emailId);
+    if (!row) return { error: "This email no longer exists." };
+
+    let draft: { id: string; webLink: string };
+    try {
+        // Attach the app's images to the message so they show up for the guest.
+        const { html, images } = await inlineImages(row.email.html);
+        draft = await createDraft(account.id, {
+            subject: quoteEmailSubject(row.guest.guestName),
+            html,
+            to: { address: row.guest.guestEmail, name: row.guest.guestName },
+            images,
+        });
+    } catch (err) {
+        if (err instanceof EmailTooLargeError) {
+            return { error: `The email's images are too large for Outlook (${err.message}, 3MB max).` };
+        }
+        if (err instanceof MicrosoftAuthError) {
+            console.warn("Outlook draft needs sign-in again:", err.message);
+            return { error: "Your Microsoft sign-in has expired. Sign in again, then retry.", needsSignIn: true };
+        }
+        console.error("Creating the Outlook draft failed:", err);
+        return { error: "Outlook didn't accept the draft. Try again in a moment." };
+    }
+
+    await db
+        .update(email)
+        .set({ outlookDraftId: draft.id, outlookDraftLink: draft.webLink, outlookDraftAt: new Date() })
+        .where(eq(email.id, emailId));
+    revalidatePath(`/emails/${emailId}`);
+    return {};
+}
+
+export async function signOut(): Promise<void> {
+    await endSession();
+    redirect("/auth/signed-out");
 }

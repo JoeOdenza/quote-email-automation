@@ -3,14 +3,17 @@ import { Suspense } from "react";
 import { getEmail } from "@/db/queries";
 import { formatDateTime, formatMoney } from "@/libs/format";
 import { tierLabels, type QuoteType } from "@/libs/tiers";
+import { currentAccount } from "@/libs/session";
+import { createOutlookDraft } from "../../actions";
 import { CopyButton } from "./copy-button";
+import { OutlookDraft } from "./outlook-draft";
 
 async function EmailDetail({ params }: { params: PageProps<"/emails/[id]">["params"] }) {
     const { id } = await params;
     const emailId = Number(id);
     if (!Number.isInteger(emailId)) notFound();
 
-    const data = await getEmail(emailId);
+    const [data, account] = await Promise.all([getEmail(emailId), currentAccount()]);
     if (!data) notFound();
     const { email, guest, layers } = data;
 
@@ -24,7 +27,19 @@ async function EmailDetail({ params }: { params: PageProps<"/emails/[id]">["para
                     </p>
                     <p className="mt-1 text-xs text-zinc-500">Generated {formatDateTime(email.createdAt)}</p>
                 </div>
-                <CopyButton text={email.html} />
+                <div className="flex flex-wrap items-start justify-end gap-3">
+                    <CopyButton text={email.html} />
+                    <OutlookDraft
+                        action={createOutlookDraft.bind(null, email.id)}
+                        signedInAs={account?.email ?? null}
+                        draft={
+                            email.outlookDraftAt
+                                ? { link: email.outlookDraftLink, savedAt: formatDateTime(email.outlookDraftAt) }
+                                : null
+                        }
+                        returnTo={`/emails/${email.id}`}
+                    />
+                </div>
 
                 <dl className="grid w-full gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-3">
                     {layers.map((layer) => (

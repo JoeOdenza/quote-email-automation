@@ -58,6 +58,12 @@ function resolveImages(data: QuoteEmailData, baseUrl: string): QuoteEmailData {
     return { ...data, promo: layer(data.promo), upgrade: layer(data.upgrade), hailMary: layer(data.hailMary) };
 }
 
+// The subject line used when the email is saved to Outlook.
+export function quoteEmailSubject(guestName: string): string {
+    const name = firstName(guestName);
+    return name ? `${name}, your vacation options from Odenza` : "Your vacation options from Odenza";
+}
+
 function firstName(fullName: string): string {
     return fullName.trim().split(/\s+/)[0] ?? "";
 }

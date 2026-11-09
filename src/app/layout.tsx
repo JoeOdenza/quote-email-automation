@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
+import { AccountMenu } from "./ui/account-menu";
 import { NavTabs } from "./ui/nav-tabs";
 import "./globals.css";
 
@@ -28,7 +30,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="bg-[#14304f]">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="text-base font-semibold text-white">Quote Emails</span>
-            <NavTabs />
+            <div className="flex flex-wrap items-center gap-4">
+              <NavTabs />
+              <Suspense fallback={null}>
+                <AccountMenu />
+              </Suspense>
+            </div>
           </div>
         </header>
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6">{children}</div>
