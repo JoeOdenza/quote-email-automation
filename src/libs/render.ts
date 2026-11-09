@@ -132,6 +132,11 @@ function spacer(height: number): string {
     return `<tr><td height="${height}" style="height:${height}px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
 }
 
+// The logo's actual pixel size (public/OdenzaLogo.png). Update these if the
+// logo file changes, or Outlook will stretch it to the old shape.
+const LOGO_WIDTH = 249;
+const LOGO_HEIGHT = 45;
+
 function header(agent: Agent, logoSrc: string): string {
     return `
     <tr>
@@ -139,7 +144,7 @@ function header(agent: Agent, logoSrc: string): string {
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                     <td width="50%" valign="middle">
-                        <img src="${esc(logoSrc)}" width="170" height="60" alt="Odenza" style="display:block;border:0;width:170px;height:60px;">
+                        <img src="${esc(logoSrc)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="Odenza" style="display:block;border:0;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;">
                     </td>
                     <td width="50%" valign="middle" align="right" style="${FONT}font-size:13px;line-height:20px;color:${COLORS.navySoft};">
                         <span style="font-size:15px;font-weight:bold;color:#ffffff;">${esc(agent.name)}</span><br>
