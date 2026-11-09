@@ -1,0 +1,35 @@
+# Example Caddy site block for mailing.odenzamarketing.com. Merge it into the
+# server's existing Caddyfile (replacing the block for this domain), then run
+# `caddy reload`. Caddy keeps handling HTTPS and the certificate as it does now.
+#
+#   /                → landing page (deploy/landing/index.html)
+#   /travel/quote/*  → this app (quote emails)
+#   /sales/*         → the sales app
+#
+# Change the ports to wherever each app is running on the server.
+
+mailing.odenzamarketing.com {
+	encode gzip zstd
+
+	# Quote email app. "handle" (not "handle_path") passes the path through
+	# unchanged: the app is built with basePath "/travel/quote" and expects it.
+	handle /travel/quote* {
+		reverse_proxy localhost:3000
+	}
+
+	# Sales app. Same idea if it's set up to run under /sales. If it can't be
+	# given a base path, "handle_path /sales*" strips the prefix before passing
+	# requests on, but then the app's own links and redirects that start with
+	# "/" will miss the /sales prefix.
+	handle /sales* {
+		reverse_proxy localhost:3001
+	}
+
+	# Everything else: the landing page. Copy deploy/landing/ to a folder on
+	# the server and point "root" at it.
+	handle {
+		root * C:/odenza/landing
+		try_files {path} /index.html
+		file_server
+	}
+}

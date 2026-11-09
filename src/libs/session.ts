@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { microsoftAccount, session } from "@/db/schema";
 import { isAllowed } from "./access";
 import { randomToken, sha256 } from "./crypto";
+import { BASE_PATH } from "./base-path";
 import { appUrl } from "./microsoft";
 
 export const SESSION_COOKIE = "qe_session";
@@ -15,7 +16,8 @@ const cookieOptions = () => ({
     httpOnly: true,
     sameSite: "lax" as const,
     secure: appUrl().startsWith("https://"),
-    path: "/",
+    // Only sent to this app, not the other apps on the same domain.
+    path: BASE_PATH,
 });
 
 // Call from a Route Handler or Server Action (cookies can't be set while rendering).
@@ -30,7 +32,7 @@ export async function endSession(): Promise<void> {
     const store = await cookies();
     const token = store.get(SESSION_COOKIE)?.value;
     if (token) await db.delete(session).where(eq(session.tokenHash, sha256(token)));
-    store.delete(SESSION_COOKIE);
+    store.delete({ name: SESSION_COOKIE, path: BASE_PATH });
 }
 
 // The signed-in Microsoft account, or null. Safe to call while rendering.

@@ -1,3 +1,4 @@
+import { withBasePath } from "./base-path";
 import type { Agent, Incentive, QuoteEmailData, QuoteLayer, Quote } from "./types";
 
 const FONT = "font-family:Arial,Helvetica,sans-serif;";
@@ -46,10 +47,16 @@ function formatPrice(price: Quote): string {
     return `${value} ${price.currency}`
 }
 
-// Images can be given as site paths ("/images/promo.jpg"). An email needs full
-// URLs, since it's read outside the app, so they're resolved against baseUrl.
-function resolveImages(data: QuoteEmailData, baseUrl: string): QuoteEmailData {
-    const url = (src: string) => new URL(src, baseUrl).href;
+// Images can be given as site paths ("/images/promo.jpg"). They get the app's
+// base path, and when a baseUrl is given they're made into full URLs, which an
+// email needs since it's read outside the app.
+function imageUrl(src: string, baseUrl: string | undefined): string {
+    const path = withBasePath(src);
+    return baseUrl ? new URL(path, baseUrl).href : path;
+}
+
+function resolveImages(data: QuoteEmailData, baseUrl: string | undefined): QuoteEmailData {
+    const url = (src: string) => imageUrl(src, baseUrl);
     const layer = (quote: QuoteLayer): QuoteLayer => ({
         ...quote,
         imageUrl: quote.imageUrl && url(quote.imageUrl),
@@ -367,7 +374,7 @@ export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier
             <p style="margin:0 0 6px;${FONT}font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${COLORS.muted};">${esc(labels[tier])} quote</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;margin-bottom:16px;">
                 <tr>
-                    <td style="padding:0 24px 20px;">${incentiveList([incentive], style.incentives, style.background)}</td>
+                    <td style="padding:0 24px 20px;">${incentiveList([{ ...incentive, srcImg: withBasePath(incentive.srcImg) }], style.incentives, style.background)}</td>
                 </tr>
             </table>`;
         })
@@ -402,10 +409,9 @@ export function renderQuoteEmail(
     options: { logoSrc: string; heroSrc?: string; baseUrl?: string },
 ): string {
     const { baseUrl } = options;
-    const url = (src: string) => (baseUrl ? new URL(src, baseUrl).href : src);
-    const logoSrc = url(options.logoSrc);
-    const heroSrc = options.heroSrc && url(options.heroSrc);
-    if (baseUrl) data = resolveImages(data, baseUrl);
+    const logoSrc = imageUrl(options.logoSrc, baseUrl);
+    const heroSrc = options.heroSrc && imageUrl(options.heroSrc, baseUrl);
+    data = resolveImages(data, baseUrl);
 
     return `<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">

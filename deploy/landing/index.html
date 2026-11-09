@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Odenza Tools</title>
+    <style>
+        :root {
+            --navy: #14304f;
+            --blue: #0045a5;
+            --page: #eef1f5;
+            --text: #27272a;
+            --muted: #6b7280;
+            --border: #dde3ea;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--page);
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+        }
+        header {
+            background: var(--navy);
+            padding: 20px 24px;
+        }
+        header img { display: block; height: 45px; width: auto; }
+        main {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 48px 16px;
+        }
+        h1 { margin: 0 0 6px; font-size: 1.5rem; color: var(--navy); }
+        .lead { margin: 0 0 28px; color: var(--muted); }
+        .apps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .app {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 24px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: inherit;
+            text-decoration: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .app:hover, .app:focus-visible {
+            border-color: var(--blue);
+            box-shadow: 0 4px 14px rgba(20, 48, 79, 0.12);
+            outline: none;
+        }
+        .team {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--blue);
+        }
+        .app h2 { margin: 0; font-size: 1.15rem; color: var(--navy); }
+        .app p { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--muted); }
+        .go { margin-top: 8px; font-size: 0.9rem; font-weight: 600; color: var(--blue); }
+        .note { margin-top: 28px; font-size: 0.85rem; color: var(--muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- Served by the quote app, which leaves its logo public. -->
+        <img src="/travel/quote/OdenzaLogo.png" alt="Odenza">
+    </header>
+    <main>
+        <h1>Choose an app</h1>
+        <p class="lead">Each app asks you to sign in with your Microsoft account.</p>
+
+        <div class="apps">
+            <a class="app" href="/travel/quote">
+                <span class="team">Travel</span>
+                <h2>Quote emails</h2>
+                <p>Build travel quote emails for guests and save them to Outlook as drafts.</p>
+                <span class="go">Open →</span>
+            </a>
+            <a class="app" href="/sales/">
+                <span class="team">Sales</span>
+                <h2>Sales mailing</h2>
+                <p>Mailing tools for the sales team.</p>
+                <span class="go">Open →</span>
+            </a>
+        </div>
+
+        <p class="note">If you've already signed in to one app, the other usually signs you in without asking for your password again.</p>
+    </main>
+</body>
+</html>

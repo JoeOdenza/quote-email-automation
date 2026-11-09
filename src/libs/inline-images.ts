@@ -4,6 +4,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { upload } from "@/db/schema";
+import { stripBasePath } from "./base-path";
 import { appUrl } from "./microsoft";
 
 // Saved emails link their images to this app (e.g. http://localhost:3000/
@@ -37,7 +38,8 @@ function isOwnImage(url: URL): boolean {
 }
 
 async function loadImage(url: URL): Promise<Omit<InlineImage, "contentId"> | null> {
-    const uploadId = url.pathname.match(/^\/uploads\/([\w-]+)$/)?.[1];
+    const pathname = stripBasePath(url.pathname);
+    const uploadId = pathname.match(/^\/uploads\/([\w-]+)$/)?.[1];
     if (uploadId) {
         const [row] = await db
             .select({ contentType: upload.contentType, data: upload.data })
@@ -50,7 +52,7 @@ async function loadImage(url: URL): Promise<Omit<InlineImage, "contentId"> | nul
 
     // A file in public/. Resolved and checked so a crafted path can't read
     // anything outside that folder.
-    const file = path.resolve(PUBLIC_DIR, "." + decodeURIComponent(url.pathname));
+    const file = path.resolve(PUBLIC_DIR, "." + decodeURIComponent(pathname));
     const contentType = CONTENT_TYPES[path.extname(file).toLowerCase()];
     if (!file.startsWith(PUBLIC_DIR + path.sep) || !contentType) return null;
     try {

@@ -1,3 +1,4 @@
+import { withBasePath } from "@/libs/base-path";
 import { primaryButton } from "../../ui/form";
 
 // Public (under /auth), so signing out doesn't bounce straight back to Microsoft.
@@ -8,7 +9,7 @@ export default function SignedOutPage() {
             <p className="text-sm text-zinc-600">
                 You&apos;re signed out of this app. Your Microsoft account itself is still signed in on this browser.
             </p>
-            <a href="/auth/signin" className={primaryButton}>
+            <a href={withBasePath("/auth/signin")} className={primaryButton}>
                 Sign in with Microsoft
             </a>
         </main>

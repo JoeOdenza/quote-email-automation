@@ -17,8 +17,12 @@ export function proxy(request: NextRequest) {
 
     // A page visit: go sign in, then come back here.
     if (request.method === "GET" || request.method === "HEAD") {
+        // nextUrl paths leave out the base path, and add it back when the
+        // URL is written out, so both of these stay inside the app.
         const { pathname, search } = request.nextUrl;
-        const url = new URL("/auth/signin", request.url);
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/signin";
+        url.search = "";
         url.searchParams.set("returnTo", pathname + search);
         return NextResponse.redirect(url);
     }
@@ -27,5 +31,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!auth/|uploads/|images/|_next/|OdenzaLogo\\.png$|favicon\\.ico$).*)"],
+    // Matchers are relative to the base path. The home page ("/travel/quote")
+    // needs its own entry: with a base path the pattern below only matches
+    // URLs with something after "/travel/quote/".
+    matcher: ["/", "/((?!auth/|uploads/|images/|_next/|OdenzaLogo\\.png$|favicon\\.ico$).*)"],
 };

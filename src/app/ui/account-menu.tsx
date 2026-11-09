@@ -1,4 +1,5 @@
 import { signOut } from "../actions";
+import { withBasePath } from "@/libs/base-path";
 import { currentAccount } from "@/libs/session";
 
 // Shows who's signed in with Microsoft. A plain <a> (not <Link>) for sign-in,
@@ -7,7 +8,7 @@ export async function AccountMenu() {
     const account = await currentAccount();
     if (!account) {
         return (
-            <a href="/auth/signin" className="text-sm font-medium text-white/80 hover:text-white">
+            <a href={withBasePath("/auth/signin")} className="text-sm font-medium text-white/80 hover:text-white">
                 Sign in with Microsoft
             </a>
         );

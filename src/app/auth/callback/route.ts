@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { withBasePath } from "@/libs/base-path";
 import { completeSignIn, NotAllowedError } from "@/libs/microsoft";
 import { takePendingSignIn } from "@/libs/oauth-state";
 import { startSession } from "@/libs/session";
@@ -13,7 +14,7 @@ function errorPage(message: string, status = 400) {
 <body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#27272a">
 <h1 style="font-size:1.25rem;color:#14304f">Microsoft sign-in didn't complete</h1>
 <p>${esc(message)}</p>
-<p><a href="/auth/signin" style="color:#0045a5">Try again</a> · <a href="/" style="color:#0045a5">Back to the app</a></p>`,
+<p><a href="${withBasePath("/auth/signin")}" style="color:#0045a5">Try again</a> · <a href="${withBasePath("/")}" style="color:#0045a5">Back to the app</a></p>`,
         { status, headers: { "Content-Type": "text/html; charset=utf-8" } },
     );
 }
@@ -54,5 +55,7 @@ export async function GET(request: Request) {
     }
 
     await startSession(accountId);
-    redirect(pending.returnTo);
+    // redirect() in a Route Handler doesn't add the base path (pages and
+    // Server Actions do), so it's added here.
+    redirect(withBasePath(pending.returnTo));
 }

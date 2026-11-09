@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { listAllIncentiveTypes } from "@/db/queries";
+import { withBasePath } from "@/libs/base-path";
 import { primaryButton } from "../ui/form";
 
 async function IncentiveList() {
@@ -22,7 +23,7 @@ async function IncentiveList() {
                         {incentive.srcImg ? (
                             // eslint-disable-next-line @next/next/no-img-element -- uploads and external placeholders, shown as-is
                             <img
-                                src={incentive.srcImg}
+                                src={withBasePath(incentive.srcImg)}
                                 alt=""
                                 width={44}
                                 height={44}
