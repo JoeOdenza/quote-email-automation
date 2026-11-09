@@ -7,6 +7,7 @@ import { Suspense } from "react";
 const tabs = [
     { href: "/", label: "New quote" },
     { href: "/emails", label: "Past emails" },
+    { href: "/incentives", label: "Incentives" },
     { href: "/settings", label: "Settings" },
 ];
 

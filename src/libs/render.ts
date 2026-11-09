@@ -253,8 +253,9 @@ function quoteCard(quote: QuoteLayer, style: CardStyle): string {
     </tr>`;
 }
 
-function renderPromoLayer(quote: QuoteLayer): string {
-    return quoteCard(quote, {
+// Keyed like QuoteEmailData: promo, upgrade, hailMary.
+const CARD_STYLES = {
+    promo: {
         badge: "Your quote",
         badgeBackground: COLORS.paleBlue,
         badgeColor: COLORS.blue,
@@ -272,11 +273,8 @@ function renderPromoLayer(quote: QuoteLayer): string {
         buttonColor: "#ffffff",
         buttonSize: 16,
         incentives: { background: COLORS.paleBlue, titleColor: COLORS.navy, textColor: COLORS.text },
-    });
-}
-
-function renderUpgradeLayer(quote: QuoteLayer): string {
-    return quoteCard(quote, {
+    },
+    upgrade: {
         badge: "Recommended upgrade",
         badgeBackground: COLORS.tealSoft,
         badgeColor: COLORS.teal,
@@ -294,11 +292,8 @@ function renderUpgradeLayer(quote: QuoteLayer): string {
         buttonColor: "#ffffff",
         buttonSize: 16,
         incentives: { background: COLORS.tealSoft, titleColor: COLORS.teal, textColor: COLORS.text },
-    });
-}
-
-function renderHailMaryLayer(quote: QuoteLayer): string {
-    return quoteCard(quote, {
+    },
+    hailMary: {
         badge: "★ Our best offer",
         badgeBackground: COLORS.gold,
         badgeColor: COLORS.navy,
@@ -316,7 +311,36 @@ function renderHailMaryLayer(quote: QuoteLayer): string {
         buttonColor: COLORS.navy,
         buttonSize: 18,
         incentives: { background: "#1d3d61", titleColor: COLORS.gold, textColor: "#ffffff" },
-    });
+    },
+} satisfies Record<string, CardStyle>;
+
+type Tier = keyof typeof CARD_STYLES;
+
+// How one incentive looks inside each of the three quote cards, for the
+// incentive editor's live preview. Uses the same markup as the real email.
+export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier, string>): string {
+    const tiers = Object.keys(CARD_STYLES) as Tier[];
+    const cards = tiers
+        .map((tier) => {
+            const style = CARD_STYLES[tier];
+            return `
+            <p style="margin:0 0 6px;${FONT}font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${COLORS.muted};">${esc(labels[tier])} quote</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;margin-bottom:16px;">
+                <tr>
+                    <td style="padding:0 24px 20px;">${incentiveList([incentive], style.incentives)}</td>
+                </tr>
+            </table>`;
+        })
+        .join("");
+
+    return `<!DOCTYPE html>
+<html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:16px;background-color:${COLORS.page};">
+        <div style="max-width:${CONTENT_WIDTH}px;margin:0 auto;">${cards}
+        </div>
+    </body>
+</html>`;
 }
 
 function footer(agent: Agent): string {
@@ -357,11 +381,11 @@ export function renderQuoteEmail(
                         ${header(data.agent, logoSrc)}
                         ${intro(data.guestName, heroSrc)}
                         ${spacer(24)}
-                        ${renderPromoLayer(data.promo)}
+                        ${quoteCard(data.promo, CARD_STYLES.promo)}
                         ${spacer(24)}
-                        ${renderUpgradeLayer(data.upgrade)}
+                        ${quoteCard(data.upgrade, CARD_STYLES.upgrade)}
                         ${spacer(24)}
-                        ${renderHailMaryLayer(data.hailMary)}
+                        ${quoteCard(data.hailMary, CARD_STYLES.hailMary)}
                         ${spacer(32)}
                         ${footer(data.agent)}
                     </table>

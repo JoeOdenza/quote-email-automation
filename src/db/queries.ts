@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from ".";
 import { agent, email, guest, incentive, incentiveType, quoteLayer } from "./schema";
 import { quoteTypes } from "@/libs/tiers";
@@ -64,4 +64,41 @@ export async function getEmail(id: number) {
                 incentives: incentives.filter((i) => i.quoteLayerId === layer.id),
             })),
     };
+}
+
+// Every incentive, active first, with how many times each has been issued.
+export async function listAllIncentiveTypes() {
+    return db
+        .select({
+            id: incentiveType.id,
+            title: incentiveType.title,
+            description: incentiveType.description,
+            code: incentiveType.code,
+            srcImg: incentiveType.srcImg,
+            active: incentiveType.active,
+            issued: count(incentive.incentiveCode),
+        })
+        .from(incentiveType)
+        .leftJoin(incentive, eq(incentive.incentiveTypeId, incentiveType.id))
+        .groupBy(incentiveType.id)
+        .orderBy(desc(incentiveType.active), asc(incentiveType.title));
+}
+
+// One incentive, with how many times it has been issued.
+export async function getIncentiveType(id: string) {
+    const [row] = await db
+        .select({
+            id: incentiveType.id,
+            title: incentiveType.title,
+            description: incentiveType.description,
+            code: incentiveType.code,
+            srcImg: incentiveType.srcImg,
+            active: incentiveType.active,
+            issued: count(incentive.incentiveCode),
+        })
+        .from(incentiveType)
+        .leftJoin(incentive, eq(incentive.incentiveTypeId, incentiveType.id))
+        .where(eq(incentiveType.id, id))
+        .groupBy(incentiveType.id);
+    return row ?? null;
 }

@@ -8,7 +8,15 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getAgent } from "@/db/queries";
 import { agent, email, guest, incentive, incentiveType, quoteLayer, upload } from "@/db/schema";
-import { prepareBanner } from "@/libs/banner";
+import { prepareBanner, prepareIcon } from "@/libs/images";
+import {
+    CODE_MAX,
+    DESCRIPTION_MAX,
+    TITLE_MAX,
+    iconImageTypes,
+    iconMaxBytes,
+    placeholderIcon,
+} from "@/libs/incentives";
 import { renderQuoteEmail } from "@/libs/render";
 import {
     currencies,
@@ -248,4 +256,86 @@ export async function saveAgent(_prev: FormState, formData: FormData): Promise<F
 
     refresh();
     return { saved: true, values };
+}
+
+// Turns a title into a readable id, e.g. "$150 future travel credit" ->
+// "150-future-travel-credit". Ids are permanent, so they're never changed
+// after the incentive is created, even if the title is.
+async function newIncentiveId(title: string): Promise<string> {
+    const base =
+        title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 40)
+            .replace(/-+$/, "") || "incentive";
+    const taken = new Set(
+        (await db.select({ id: incentiveType.id }).from(incentiveType)).map((row) => row.id),
+    );
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+    return id;
+}
+
+// Adds an incentive (no "id" field) or edits one ("id" set). An edit only
+// changes new emails: sent emails keep the wording they were sent with, and
+// a replaced icon is stored as a new file so sent emails keep showing the old one.
+export async function saveIncentive(_prev: FormState, formData: FormData): Promise<FormState> {
+    const values = formValues(formData);
+    const fail = (error: string): FormState => ({ error, values });
+
+    const id = text(formData, "id");
+    const title = text(formData, "title");
+    const description = text(formData, "description");
+    const code = text(formData, "code").toUpperCase();
+    const active = id ? formData.get("active") === "on" : true;
+
+    if (!title) return fail("Enter a title.");
+    if (title.length > TITLE_MAX) return fail(`Keep the title to ${TITLE_MAX} characters or fewer.`);
+    if (description.length > DESCRIPTION_MAX) {
+        return fail(`Keep the description to ${DESCRIPTION_MAX} characters or fewer.`);
+    }
+    if (code.length > CODE_MAX || !/^[A-Z0-9-]*$/.test(code)) {
+        return fail(`The code can only use letters, numbers and dashes, up to ${CODE_MAX} characters.`);
+    }
+
+    const iconFile = uploadedFile(formData, "icon");
+    let icon: Buffer | null = null;
+    if (iconFile) {
+        if (!(iconImageTypes as readonly string[]).includes(iconFile.type)) {
+            return fail("The icon must be a JPG, PNG, GIF or WebP. Choose the file again.");
+        }
+        if (iconFile.size > iconMaxBytes) return fail("The icon must be 2MB or smaller. Choose a smaller file.");
+        icon = await prepareIcon(iconFile);
+        if (!icon) return fail("The icon couldn't be read. Try a different file.");
+    }
+    const iconUpload = icon && { id: randomUUID(), contentType: "image/png", data: icon };
+    const iconSrc = iconUpload && `/uploads/${iconUpload.id}`;
+
+    const fields = { title, description: description || null, code: code || null, active };
+    if (id) {
+        const [existing] = await db
+            .select({ id: incentiveType.id })
+            .from(incentiveType)
+            .where(eq(incentiveType.id, id));
+        if (!existing) return fail("This incentive no longer exists.");
+
+        await db.transaction(async (tx) => {
+            if (iconUpload) await tx.insert(upload).values(iconUpload);
+            await tx
+                .update(incentiveType)
+                .set({ ...fields, ...(iconSrc && { srcImg: iconSrc }) })
+                .where(eq(incentiveType.id, id));
+        });
+    } else {
+        const newId = await newIncentiveId(title);
+        await db.transaction(async (tx) => {
+            if (iconUpload) await tx.insert(upload).values(iconUpload);
+            await tx.insert(incentiveType).values({ id: newId, ...fields, srcImg: iconSrc ?? placeholderIcon(title) });
+        });
+    }
+
+    revalidatePath("/incentives", "layout");
+    revalidatePath("/");
+    redirect("/incentives");
 }
