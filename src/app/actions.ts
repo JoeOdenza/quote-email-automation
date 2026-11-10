@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getAgent, getEmail } from "@/db/queries";
 import { agent, email, guest, incentive, incentiveType, quoteLayer, upload } from "@/db/schema";
-import { prepareBanner, prepareIcon } from "@/libs/images";
+import { prepareBanner, prepareCardImage, prepareIcon } from "@/libs/images";
 import {
     CODE_MAX,
     DESCRIPTION_MAX,
@@ -18,14 +18,15 @@ import {
     placeholderIcon,
 } from "@/libs/incentives";
 import { EmailTooLargeError, inlineImages } from "@/libs/inline-images";
-import { createDraft, MicrosoftAuthError } from "@/libs/microsoft";
+import { appUrl, createDraft, MicrosoftAuthError } from "@/libs/microsoft";
 import { QUOTE_EMAIL_SUBJECT, renderQuoteEmail } from "@/libs/render";
 import { currentAccount, endSession, requireAccount } from "@/libs/session";
 import {
     currencies,
-    heroImageMaxBytes,
-    heroImageTypes,
     heroSrc as defaultHeroSrc,
+    photoImageMaxBytes,
+    photoImageMaxLabel,
+    photoImageTypes,
     logoSrc,
     quoteTypes,
     tierLabels,
@@ -93,6 +94,29 @@ function uploadedFile(formData: FormData, name: string): File | null {
     return value instanceof File && value.size > 0 ? value : null;
 }
 
+type Upload = { id: string; contentType: string; data: Buffer };
+
+// Checks and reshapes an optional photo upload. Returns null when none was
+// chosen, an Upload ready to store, or an error message for the form.
+async function photoUpload(
+    formData: FormData,
+    name: string,
+    label: string,
+    prepare: (file: File) => Promise<Buffer | null>,
+): Promise<Upload | null | { error: string }> {
+    const file = uploadedFile(formData, name);
+    if (!file) return null;
+    if (!(photoImageTypes as readonly string[]).includes(file.type)) {
+        return { error: `The ${label} must be a JPG, PNG, GIF or WebP. Choose the file again.` };
+    }
+    if (file.size > photoImageMaxBytes) {
+        return { error: `The ${label} must be ${photoImageMaxLabel} or smaller. Choose a smaller file.` };
+    }
+    const data = await prepare(file);
+    if (!data) return { error: `The ${label} couldn't be read. Try a different file.` };
+    return { id: randomUUID(), contentType: "image/jpeg", data };
+}
+
 export async function createQuoteEmail(_prev: FormState, formData: FormData): Promise<FormState> {
     await requireAccount();
     const values = formValues(formData);
@@ -108,18 +132,24 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
     if (!isEmail(guestEmail)) return fail("Enter a valid guest email.");
     if (!isProfileNum(guestProfileNum)) return fail("The profile number must be exactly 6 digits.");
 
-    const heroFile = uploadedFile(formData, "heroImage");
-    let heroImage: Buffer | null = null;
-    if (heroFile) {
-        if (!(heroImageTypes as readonly string[]).includes(heroFile.type)) {
-            return fail("The banner image must be a JPG, PNG, GIF or WebP. Choose the file again.");
-        }
-        if (heroFile.size > heroImageMaxBytes) {
-            return fail("The banner image must be 5MB or smaller. Choose a smaller file.");
-        }
-        heroImage = await prepareBanner(heroFile);
-        if (!heroImage) return fail("The banner image couldn't be read. Try a different file.");
+    // The uploads' ids are picked up front so the email can link to them; the
+    // rows themselves are written in the same transaction as the email.
+    const heroUpload = await photoUpload(formData, "heroImage", "banner image", prepareBanner);
+    if (heroUpload && "error" in heroUpload) return fail(heroUpload.error);
+
+    const tierUploads = {} as Record<QuoteType, Upload | null>;
+    for (const type of quoteTypes) {
+        const result = await photoUpload(formData, `${type}.image`, `${tierLabels[type]} photo`, (file) =>
+            prepareCardImage(file, type),
+        );
+        if (result && "error" in result) return fail(result.error);
+        tierUploads[type] = result;
     }
+    // Each tier shows its uploaded photo, or the default one for that tier.
+    const tierImageSrc = (type: QuoteType) => {
+        const tierUpload = tierUploads[type];
+        return tierUpload ? `/uploads/${tierUpload.id}` : tierPlaceholders[type].imageSrc;
+    };
 
     const tiers = {} as Record<QuoteType, TierInput>;
     for (const type of quoteTypes) {
@@ -176,7 +206,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
         duration: tiers[type].duration,
         description: tiers[type].description,
         authformLink: tierPlaceholders[type].authFormLink,
-        imageUrl: tierPlaceholders[type].imageSrc,
+        imageUrl: tierImageSrc(type),
         incentives: tiers[type].incentiveIds.map((id): Incentive => {
             const c = byId.get(id)!;
             return { id: c.id, title: c.title, description: c.description ?? "", srcImg: c.srcImg ?? "" };
@@ -197,14 +227,15 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
         upgrade: layer("upgrade"),
         hailMary: layer("hailMary"),
     };
-    // The upload's id is picked up front so the email can link to it; the row
-    // itself is written in the same transaction as the email.
-    const heroUpload = heroImage && { id: randomUUID(), contentType: "image/jpeg", data: heroImage };
     const heroSrc = heroUpload ? `/uploads/${heroUpload.id}` : defaultHeroSrc;
     const html = renderQuoteEmail(data, { logoSrc, heroSrc, baseUrl: await siteOrigin() });
 
+    const uploads = [heroUpload, ...quoteTypes.map((type) => tierUploads[type])].filter(
+        (u): u is Upload => u !== null,
+    );
+
     const emailId = await db.transaction(async (tx) => {
-        if (heroUpload) await tx.insert(upload).values(heroUpload);
+        if (uploads.length) await tx.insert(upload).values(uploads);
 
         // Match on profile number so the same guest isn't stored twice.
         const [g] = await tx
@@ -233,7 +264,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
                     checkOut: t.checkOut,
                     duration: t.duration,
                     description: t.description,
-                    imageSrc: tierPlaceholders[type].imageSrc,
+                    imageSrc: tierImageSrc(type),
                     authFormLink: tierPlaceholders[type].authFormLink,
                 })
                 .returning({ id: quoteLayer.id });
@@ -409,7 +440,13 @@ export async function createOutlookDraft(emailId: number): Promise<DraftState> {
     return {};
 }
 
+// Signing out goes to the landing page that the server shows at the root of
+// the domain (deploy/landing/), where people pick an app. Locally there's no
+// landing page (the root just leads back into this app and its sign-in), so
+// it goes to the signed-out page instead.
 export async function signOut(): Promise<void> {
     await endSession();
-    redirect("/auth/signed-out");
+    const site = new URL(appUrl());
+    if (["localhost", "127.0.0.1"].includes(site.hostname)) redirect("/auth/signed-out");
+    redirect(`${site.origin}/`);
 }

@@ -6,7 +6,18 @@ import { createQuoteEmail, type FormState } from "./actions";
 import { Field, FormMessage, Input, Section, inputClass, primaryButton } from "./ui/form";
 import { StayFields } from "./ui/stay-fields";
 import { PRICE_PATTERN, PROFILE_NUM_PATTERN } from "@/libs/validation";
-import { currencies, heroImageTypes, quoteTypes, tierExamples, tierLabels, type QuoteType } from "@/libs/tiers";
+import {
+    currencies,
+    photoImageMaxLabel,
+    photoImageTypes,
+    quoteTypes,
+    tierExamples,
+    tierLabels,
+    type QuoteType,
+} from "@/libs/tiers";
+
+const fileInputClass =
+    "text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-50";
 
 type IncentiveOption = { id: string; title: string; description: string | null; code: string | null };
 
@@ -66,14 +77,9 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
             <Section title="Banner image">
                 <Field
                     label="Top banner"
-                    hint="Optional. JPG, PNG, GIF or WebP up to 5MB. It's cropped to fit the wide, short banner (1440 × 400) automatically, so wide photos work best. Leave empty to use the default banner."
+                    hint={`Optional. JPG, PNG, GIF or WebP up to ${photoImageMaxLabel}. It's cropped to fit the wide, short banner (1440 × 400) automatically, so wide photos work best. Leave empty to use the default banner.`}
                 >
-                    <input
-                        name="heroImage"
-                        type="file"
-                        accept={heroImageTypes.join(",")}
-                        className="text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-50"
-                    />
+                    <input name="heroImage" type="file" accept={photoImageTypes.join(",")} className={fileInputClass} />
                 </Field>
             </Section>
 
@@ -106,6 +112,17 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                                     placeholder={tierExamples[type].description}
                                     defaultValue={str(`${type}.description`)}
                                     className={inputClass}
+                                />
+                            </Field>
+                            <Field
+                                label="Photo"
+                                hint={`Optional, up to ${photoImageMaxLabel}. Cropped to fit the card and shrunk for email automatically. Leave empty to use the default photo.`}
+                            >
+                                <input
+                                    name={`${type}.image`}
+                                    type="file"
+                                    accept={photoImageTypes.join(",")}
+                                    className={`${fileInputClass} w-full`}
                                 />
                             </Field>
                         </div>

@@ -426,6 +426,15 @@ const CARD_STYLES = {
 
 type Tier = keyof typeof CARD_STYLES;
 
+// The size a tier's photo shows at in its card: the card's full inner width
+// (inside its border) by the style's image height. Uploaded photos are cropped
+// to this shape (see libs/images.ts), since classic Outlook stretches images
+// to their width and height instead of cropping them.
+export function cardImageSize(tier: Tier): { width: number; height: number } {
+    const style = CARD_STYLES[tier];
+    return { width: CONTENT_WIDTH - style.borderWidth * 2, height: style.imageHeight };
+}
+
 // How one incentive looks inside each of the three quote cards, for the
 // incentive editor's live preview. Uses the same markup as the real email.
 export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier, string>): string {

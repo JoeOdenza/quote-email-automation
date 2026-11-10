@@ -51,6 +51,10 @@ export const tierExamples: Record<QuoteType, { title: string; nights: string; de
 export const heroSrc = "/images/hero-banner.jpg";
 export const logoSrc = "/OdenzaLogo.png";
 
-// Banner uploads: what the form accepts and how big they can be.
-export const heroImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-export const heroImageMaxBytes = 5 * 1024 * 1024;
+// Photo uploads (the banner and each tier's photo): what the form accepts and
+// how big each file can be. They're shrunk on upload, so this only has to
+// allow a full-size phone or camera photo. next.config.ts's bodySizeLimit has
+// to fit all four at once.
+export const photoImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+export const photoImageMaxBytes = 10 * 1024 * 1024;
+export const photoImageMaxLabel = "10MB";

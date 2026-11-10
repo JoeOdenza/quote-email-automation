@@ -1,7 +1,8 @@
 import "server-only";
 import sharp from "sharp";
 import { ICON_SIZE } from "./incentives";
-import { EMAIL_WIDTH, HERO_HEIGHT } from "./render";
+import { EMAIL_WIDTH, HERO_HEIGHT, cardImageSize } from "./render";
+import type { QuoteType } from "./tiers";
 
 // Uploaded images are reshaped here, on the server, because email clients
 // like Outlook ignore CSS cropping: each image has to arrive at exactly the
@@ -24,6 +25,24 @@ export async function prepareBanner(file: File): Promise<Buffer | null> {
             })
             .flatten({ background: "#ffffff" }) // JPEG has no transparency
             .jpeg({ quality: 82, mozjpeg: true })
+            .toBuffer();
+    } catch {
+        return null;
+    }
+}
+
+// Turns an uploaded photo into a JPEG for one tier's card, cropped to that
+// card's shape at twice its size in the email (e.g. 1300 × 480 for a 650 × 240
+// photo). That keeps each one around 100–200KB, so all the email's images
+// stay well under Outlook's size limit.
+export async function prepareCardImage(file: File, tier: QuoteType): Promise<Buffer | null> {
+    const { width, height } = cardImageSize(tier);
+    try {
+        return await sharp(Buffer.from(await file.arrayBuffer()))
+            .rotate()
+            .resize(width * 2, height * 2, { fit: "cover", position: "attention" })
+            .flatten({ background: "#ffffff" })
+            .jpeg({ quality: 80, mozjpeg: true })
             .toBuffer();
     } catch {
         return null;
