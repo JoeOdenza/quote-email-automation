@@ -50,6 +50,13 @@
       "when": 1794248248481,
       "tag": "0006_cool_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794351436629,
+      "tag": "0007_silky_darwin",
+      "breakpoints": true
     }
   ]
 }

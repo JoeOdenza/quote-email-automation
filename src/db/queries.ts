@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from ".";
 import { agent, email, guest, incentive, incentiveType, quoteLayer } from "./schema";
 import { requireAccount } from "@/libs/session";
@@ -8,10 +8,11 @@ import { quoteTypes } from "@/libs/tiers";
 // Every query checks for a signed-in, allowed Microsoft account first, so no
 // page or action can read data without one, whatever proxy.ts lets through.
 
-// There's one agent until sign-in exists: the one saved on the settings page.
+// The signed-in person's agent details (their Settings), or null if they
+// haven't saved any yet. Each person has their own.
 export async function getAgent() {
-    await requireAccount();
-    const [row] = await db.select().from(agent).orderBy(asc(agent.id)).limit(1);
+    const account = await requireAccount();
+    const [row] = await db.select().from(agent).where(eq(agent.accountId, account.id));
     return row ?? null;
 }
 
@@ -25,27 +26,35 @@ export async function listIncentiveTypes() {
         .orderBy(asc(incentiveType.title));
 }
 
+// Emails belong to the person whose agent details they were made with, and
+// each person only sees their own.
 export async function listEmails() {
-    await requireAccount();
+    const account = await requireAccount();
     return db
         .select({
             id: email.id,
             createdAt: email.createdAt,
-            guestName: guest.guestName,
+            // As entered for this email (older emails: the guest's latest name).
+            guestName: sql<string>`coalesce(${email.guestName}, ${guest.guestName})`,
             guestProfileNum: guest.guestProfileNum,
         })
         .from(email)
         .innerJoin(guest, eq(email.guestId, guest.id))
+        .innerJoin(agent, eq(email.agentId, agent.id))
+        .where(eq(agent.accountId, account.id))
         .orderBy(desc(email.id));
 }
 
+// One of the signed-in person's emails, or null if it doesn't exist or is
+// someone else's (so another person's email can't be opened by its number).
 export async function getEmail(id: number) {
-    await requireAccount();
+    const account = await requireAccount();
     const [row] = await db
         .select({ email, guest })
         .from(email)
         .innerJoin(guest, eq(email.guestId, guest.id))
-        .where(eq(email.id, id));
+        .innerJoin(agent, eq(email.agentId, agent.id))
+        .where(and(eq(email.id, id), eq(agent.accountId, account.id)));
     if (!row) return null;
 
     const layers = await db.select().from(quoteLayer).where(eq(quoteLayer.emailId, id));
@@ -64,7 +73,14 @@ export async function getEmail(id: number) {
 
     const order = (type: string) => quoteTypes.indexOf(type as (typeof quoteTypes)[number]);
     return {
-        ...row,
+        email: row.email,
+        // The name and email as entered for this email, which a later quote for
+        // the same profile number may have changed on the guest row.
+        guest: {
+            ...row.guest,
+            guestName: row.email.guestName ?? row.guest.guestName,
+            guestEmail: row.email.guestEmail ?? row.guest.guestEmail,
+        },
         layers: layers
             .sort((a, b) => order(a.quoteType) - order(b.quoteType))
             .map((layer) => ({

@@ -15,8 +15,15 @@ const createdAt = () =>
         .notNull()
         .default(sql`(unixepoch())`);
 
+// One per signed-in person: the details their emails are signed with. Their
+// emails are found through it (email.agentId), so each person sees only theirs.
 export const agent = sqliteTable("agent", {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    // The Microsoft account these details belong to. Null only for details
+    // saved before settings were per person; see libs/agent-owner.ts.
+    accountId: text("account_id")
+        .unique()
+        .references(() => microsoftAccount.id),
     name: text("name").notNull(),
     agentNum: text("agent_num").notNull().unique(),
     email: text("email").notNull(),
@@ -53,6 +60,11 @@ export const email = sqliteTable(
         agentId: integer("agent_id")
             .notNull()
             .references(() => agent.id),
+        // The guest's name and email as entered for this email. The guest row
+        // holds only the latest ones for that profile number, which a newer
+        // quote can change. Null only on emails made before these existed.
+        guestName: text("guest_name"),
+        guestEmail: text("guest_email"),
         // The email exactly as generated (image URLs already absolute), so
         // later edits to agent settings don't change past emails.
         html: text("html").notNull(),

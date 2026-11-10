@@ -18,6 +18,7 @@ import {
     placeholderIcon,
 } from "@/libs/incentives";
 import { EmailTooLargeError, inlineImages } from "@/libs/inline-images";
+import { unownedAgentWithNumber } from "@/libs/agent-owner";
 import { appUrl, createDraft, MicrosoftAuthError } from "@/libs/microsoft";
 import { QUOTE_EMAIL_SUBJECT, renderQuoteEmail } from "@/libs/render";
 import { currentAccount, endSession, requireAccount } from "@/libs/session";
@@ -246,7 +247,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
 
         const [e] = await tx
             .insert(email)
-            .values({ guestId: g.id, agentId: currentAgent.id, html, heroSrc })
+            .values({ guestId: g.id, agentId: currentAgent.id, guestName, guestEmail, html, heroSrc })
             .returning({ id: email.id });
 
         for (const type of quoteTypes) {
@@ -286,8 +287,9 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
     redirect(`/emails/${emailId}`);
 }
 
+// Saves the signed-in person's own agent details (Settings).
 export async function saveAgent(_prev: FormState, formData: FormData): Promise<FormState> {
-    await requireAccount();
+    const account = await requireAccount();
     const values = formValues(formData);
     const fields = {
         name: text(formData, "name"),
@@ -301,10 +303,18 @@ export async function saveAgent(_prev: FormState, formData: FormData): Promise<F
     }
     if (!isEmail(fields.email)) return { error: "Enter a valid email.", values };
 
-    const existing = await getAgent();
+    // Their own details, or else details saved under this agent number before
+    // settings were per person, which they take over (with those emails).
+    const existingId = (await getAgent())?.id ?? (await unownedAgentWithNumber(fields.agentNum));
     try {
-        if (existing) await db.update(agent).set(fields).where(eq(agent.id, existing.id));
-        else await db.insert(agent).values(fields);
+        if (existingId) {
+            await db
+                .update(agent)
+                .set({ ...fields, accountId: account.id })
+                .where(eq(agent.id, existingId));
+        } else {
+            await db.insert(agent).values({ ...fields, accountId: account.id });
+        }
     } catch (err) {
         if (String(err).includes("UNIQUE")) {
             return { error: "Another agent already uses that agent number.", values };

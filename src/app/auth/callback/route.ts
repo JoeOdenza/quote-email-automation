@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { claimAgentByEmail } from "@/libs/agent-owner";
 import { withBasePath } from "@/libs/base-path";
 import { completeSignIn, NotAllowedError } from "@/libs/microsoft";
 import { takePendingSignIn } from "@/libs/oauth-state";
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
         return errorPage("Signing in with Microsoft failed. Check the server log for details.", 502);
     }
 
+    await claimAgentByEmail(accountId);
     await startSession(accountId);
     // redirect() in a Route Handler doesn't add the base path (pages and
     // Server Actions do), so it's added here.

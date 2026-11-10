@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { createQuoteEmail, type FormState } from "./actions";
+import { Accordion } from "./ui/accordion";
 import { Field, FormMessage, Input, Section, inputClass, primaryButton } from "./ui/form";
 import { StayFields } from "./ui/stay-fields";
 import { PRICE_PATTERN, PROFILE_NUM_PATTERN } from "@/libs/validation";
@@ -88,32 +89,34 @@ export function QuoteForm({ incentives, hasAgent }: { incentives: IncentiveOptio
                     <Section key={type} title={`${tierLabels[type]} quote`}>
                         <p className="-mt-2 mb-4 text-xs text-zinc-500">{tierHints[type]}</p>
                         <div className="mb-4 flex flex-col gap-3">
-                            <Field label="Title">
-                                <Input
-                                    name={`${type}.title`}
-                                    required
-                                    autoComplete="off"
-                                    placeholder={tierExamples[type].title}
-                                    defaultValue={str(`${type}.title`)}
+                            <Accordion summary="Accommodation details" previewField={`${type}.title`}>
+                                <Field label="Title">
+                                    <Input
+                                        name={`${type}.title`}
+                                        required
+                                        autoComplete="off"
+                                        placeholder={tierExamples[type].title}
+                                        defaultValue={str(`${type}.title`)}
+                                    />
+                                </Field>
+                                <StayFields
+                                    name={type}
+                                    nightsPlaceholder={tierExamples[type].nights}
+                                    defaultNights={str(`${type}.nights`)}
+                                    defaultCheckIn={str(`${type}.checkIn`)}
+                                    defaultCheckOut={str(`${type}.checkOut`)}
                                 />
-                            </Field>
-                            <StayFields
-                                name={type}
-                                nightsPlaceholder={tierExamples[type].nights}
-                                defaultNights={str(`${type}.nights`)}
-                                defaultCheckIn={str(`${type}.checkIn`)}
-                                defaultCheckOut={str(`${type}.checkOut`)}
-                            />
-                            <Field label="Accommodation description">
-                                <textarea
-                                    name={`${type}.description`}
-                                    required
-                                    rows={3}
-                                    placeholder={tierExamples[type].description}
-                                    defaultValue={str(`${type}.description`)}
-                                    className={inputClass}
-                                />
-                            </Field>
+                                <Field label="Accommodation description">
+                                    <textarea
+                                        name={`${type}.description`}
+                                        required
+                                        rows={3}
+                                        placeholder={tierExamples[type].description}
+                                        defaultValue={str(`${type}.description`)}
+                                        className={inputClass}
+                                    />
+                                </Field>
+                            </Accordion>
                             <Field
                                 label="Photo"
                                 hint={`Optional, up to ${photoImageMaxLabel}. Cropped to fit the card and shrunk for email automatically. Leave empty to use the default photo.`}
