@@ -4,12 +4,15 @@ import "server-only";
 // limits sign-in to that organization, so ALLOWED_EMAILS can be left empty.
 // With "common", "consumers" or "organizations" anyone with a Microsoft
 // account could sign in, so ALLOWED_EMAILS is required and nobody gets in
-// without it.
+// without it. ALLOWED_EMAILS=* lets every account in, for when the app is
+// only reachable on a private network; it has to be set on purpose, so a
+// missing or empty value never opens the app up.
 export function isAllowed(email: string): boolean {
     const allowed = (process.env.ALLOWED_EMAILS ?? "")
         .split(",")
         .map((entry) => entry.trim().toLowerCase())
         .filter(Boolean);
+    if (allowed.includes("*")) return true;
     if (allowed.length > 0) return allowed.includes(email.trim().toLowerCase());
     const tenant = (process.env.MICROSOFT_TENANT ?? "").toLowerCase();
     return !["common", "consumers", "organizations", ""].includes(tenant);
