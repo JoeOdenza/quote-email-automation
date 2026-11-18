@@ -7,7 +7,7 @@
 // Paths saved in the database ("/uploads/<id>") are kept without the prefix.
 export const BASE_PATH = "/travel/quote";
 
-// Adds BASE_PATH to a site path ("/images/hero.jpg"). Full URLs, data: URLs
+// Adds BASE_PATH to a site path ("/images/hero-banner.jpg"). Full URLs, data: URLs
 // and paths that already have the prefix are returned unchanged.
 export function withBasePath(src: string): string {
     if (!src.startsWith("/") || src.startsWith("//")) return src;

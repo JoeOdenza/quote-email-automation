@@ -1,33 +1,24 @@
 import { withBasePath } from "./base-path";
+import { CONTENT_WIDTH, EMAIL_WIDTH, GUTTER, HERO_HEIGHT, TIER_LAYOUT, type Tier } from "./email-layout";
+import { DEFAULT_COLOR_SCHEME, getColorScheme, type Palette } from "./color-schemes";
 import type { Agent, Incentive, QuoteEmailData, QuoteLayer, Quote } from "./types";
 
 const FONT = "font-family:Arial,Helvetica,sans-serif;";
 
-// The email is 720px wide; content sits inside 32px side padding. Wider than
-// the classic 600px so it fills more of a desktop reading pane. Classic
-// Outlook keeps it at exactly this width; other apps shrink it to fit phones
-// (see RESPONSIVE_CSS).
-export const EMAIL_WIDTH = 720;
-const GUTTER = 32;
-const CONTENT_WIDTH = EMAIL_WIDTH - GUTTER * 2;
-
-// Placeholder brand colours until Renato picks real ones.
+// The neutral colours, the same in every theme. The rest come from the
+// theme's colour scheme (libs/color-schemes.ts).
 const COLORS = {
     page: "#eef1f5",
     text: "#2b2f36",
     muted: "#6b7280",
     border: "#dde3ea",
-    navy: "#14304f",
-    navySoft: "#c9d6e6",
-    blue: "#0045a5",
-    teal: "#0f766e",
-    tealSoft: "#e6f4f2",
-    tealDeep: "#0b4f4a",
-    tealDark: "#083c38",
-    gold: "#e0b13a",
-    goldSoft: "#fdf6e3",
-    paleBlue: "#f4f7fb",
 };
+
+// "#0d3b66", 0.35 -> "rgba(13,59,102,0.35)", for shadows in a theme colour.
+function rgba(hex: string, alpha: number): string {
+    const value = parseInt(hex.slice(1), 16);
+    return `rgba(${(value >> 16) & 0xff},${(value >> 8) & 0xff},${value & 0xff},${alpha})`;
+}
 
 function esc(value: string | number): string {
     return String(value)
@@ -52,7 +43,7 @@ function formatPrice(price: Quote): string {
     return `${value} ${price.currency}`
 }
 
-// Images can be given as site paths ("/images/promo.jpg"). They get the app's
+// Images can be given as site paths ("/images/hero-banner.jpg"). They get the app's
 // base path, and when a baseUrl is given they're made into full URLs, which an
 // email needs since it's read outside the app.
 function imageUrl(src: string, baseUrl: string | undefined): string {
@@ -152,16 +143,16 @@ function spacer(height: number): string {
 const LOGO_WIDTH = 249;
 const LOGO_HEIGHT = 45;
 
-function header(agent: Agent, logoSrc: string): string {
+function header(agent: Agent, logoSrc: string, palette: Palette): string {
     return `
     <tr>
-        <td class="pad" bgcolor="${COLORS.navy}" style="padding:20px ${GUTTER}px;">
+        <td class="pad" bgcolor="${palette.dark}" style="padding:20px ${GUTTER}px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                     <td width="50%" valign="middle">
                         <img src="${esc(logoSrc)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="Odenza" style="display:block;border:0;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;">
                     </td>
-                    <td width="50%" valign="middle" align="right" style="${FONT}font-size:13px;line-height:20px;color:${COLORS.navySoft};">
+                    <td width="50%" valign="middle" align="right" style="${FONT}font-size:13px;line-height:20px;color:${palette.darkSoft};">
                         <span style="font-size:15px;font-weight:bold;color:#ffffff;">${esc(agent.name)}</span><br>
                         Agent #${esc(agent.agentNum)}<br>
                         <a href="mailto:${esc(agent.email)}" style="color:#ffffff;text-decoration:underline;">${esc(agent.email)}</a><br>
@@ -174,12 +165,9 @@ function header(agent: Agent, logoSrc: string): string {
     </tr>`;
 }
 
-// The banner's height. Uploaded banners are cropped to this shape (see
-// libs/images.ts), so changing it changes what new uploads are cropped to.
-// The default banner is a copy cropped to match (images/hero-banner.jpg).
-export const HERO_HEIGHT = 200;
-
-function intro(guestName: string, heroSrc: string | undefined): string {
+// The banner is HERO_HEIGHT tall (libs/email-layout.ts); uploaded
+// theme banners are cropped to that shape (libs/images.ts).
+function intro(guestName: string, heroSrc: string | undefined, palette: Palette): string {
     const hero = heroSrc
         ? `
     <tr>
@@ -192,7 +180,7 @@ function intro(guestName: string, heroSrc: string | undefined): string {
     return `${hero}
     <tr>
         <td class="pad" style="padding:32px ${GUTTER}px 8px;${FONT}color:${COLORS.text};">
-            <h1 style="margin:0 0 12px;font-size:24px;line-height:30px;color:${COLORS.navy};">Hi ${esc(firstName(guestName))},</h1>
+            <h1 style="margin:0 0 12px;font-size:24px;line-height:30px;color:${palette.dark};">Hi ${esc(firstName(guestName))},</h1>
             <p style="margin:0;font-size:15px;line-height:24px;color:${COLORS.text};">
                 Thanks for talking with me about your next getaway. Below is the quote we discussed,
                 plus two upgrades I picked out for you. Each option has its own link, so you can
@@ -271,6 +259,7 @@ type CardStyle = {
 function quoteCard(quote: QuoteLayer, style: CardStyle, priceNote?: string): string {
     const title = quote.title.trim();
     const imageWidth = CONTENT_WIDTH - style.borderWidth * 2;
+
 
     const image = quote.imageUrl
         ? `
@@ -353,95 +342,94 @@ function quoteCard(quote: QuoteLayer, style: CardStyle, priceNote?: string): str
     </tr>`;
 }
 
-// Keyed like QuoteEmailData: promo, upgrade, hailMary.
+// Keyed like QuoteEmailData: promo, upgrade, hailMary. The colours come from
+// the theme; sizes and labels are the same in every theme.
 //
 // The upgrade (middle) is the one we most want guests to pick, so it gets the
 // most attention: a "most popular" ribbon, the thickest border, the biggest
-// image, price and button, a tinted price panel and a shadow. The other two
-// are deliberately quieter so it stands out between them.
-const CARD_STYLES = {
-    promo: {
-        badge: "Your quote",
-        badgeBackground: COLORS.paleBlue,
-        badgeColor: COLORS.blue,
-        background: "#ffffff",
-        borderColor: COLORS.border,
-        borderWidth: 1,
-        titleColor: COLORS.navy,
-        textColor: COLORS.text,
-        mutedColor: COLORS.muted,
-        titleSize: 20,
-        priceSize: 26,
-        imageHeight: 200,
-        buttonLabel: "Reserve this offer",
-        buttonBackground: COLORS.blue,
-        buttonColor: "#ffffff",
-        buttonSize: 16,
-        incentives: { background: COLORS.paleBlue, titleColor: COLORS.navy, textColor: COLORS.text },
-    },
-    // A deep teal card with gold accents: the only shaded card in the email.
-    upgrade: {
-        badge: "Recommended for you",
-        badgeBackground: COLORS.tealSoft,
-        badgeColor: COLORS.teal,
-        background: COLORS.tealDeep,
-        borderColor: COLORS.gold,
-        borderWidth: 3,
-        titleColor: "#ffffff",
-        textColor: "#ffffff",
-        mutedColor: "#b9ded9",
-        titleSize: 26,
-        priceSize: 36,
-        imageHeight: 240,
-        buttonLabel: "Reserve the upgrade",
-        buttonBackground: COLORS.gold,
-        buttonColor: COLORS.navy,
-        buttonSize: 18,
-        incentives: { background: COLORS.tealDark, titleColor: COLORS.gold, textColor: "#ffffff" },
-        ribbon: { label: "★ Most popular choice ★", background: COLORS.gold, color: COLORS.navy },
-        priceBackground: COLORS.tealDark,
-        priceNoteColor: COLORS.gold,
-        shadow: "0 12px 32px rgba(11,79,74,0.35)",
-    },
-    hailMary: {
-        badge: "Premium option",
-        badgeBackground: COLORS.goldSoft,
-        badgeColor: "#8a6a12",
-        background: "#ffffff",
-        borderColor: COLORS.navy,
-        borderWidth: 2,
-        titleColor: COLORS.navy,
-        textColor: COLORS.text,
-        mutedColor: COLORS.muted,
-        titleSize: 22,
-        priceSize: 28,
-        imageHeight: 220,
-        buttonLabel: "Reserve the ultimate getaway",
-        buttonBackground: COLORS.navy,
-        buttonColor: "#ffffff",
-        buttonSize: 16,
-        incentives: { background: COLORS.goldSoft, titleColor: COLORS.navy, textColor: COLORS.text },
-    },
-} satisfies Record<string, CardStyle>;
+// image, price and button, a shaded background, a tinted price panel and a
+// shadow. The other two are deliberately quieter so it stands out between them.
+function cardStyles(palette: Palette) {
+    return {
+        promo: {
+            badge: "Your quote",
+            badgeBackground: palette.accentSoft,
+            badgeColor: palette.accent,
+            background: "#ffffff",
+            borderColor: COLORS.border,
+            borderWidth: TIER_LAYOUT.promo.borderWidth,
+            titleColor: palette.dark,
+            textColor: COLORS.text,
+            mutedColor: COLORS.muted,
+            titleSize: 20,
+            priceSize: 26,
+            imageHeight: TIER_LAYOUT.promo.imageHeight,
+            buttonLabel: "Reserve this offer",
+            buttonBackground: palette.accent,
+            buttonColor: "#ffffff",
+            buttonSize: 16,
+            incentives: { background: palette.accentSoft, titleColor: palette.dark, textColor: COLORS.text },
+        },
+        // The only shaded card in the email, with highlight-coloured accents.
+        upgrade: {
+            badge: "Recommended for you",
+            badgeBackground: palette.featureBadgeBg,
+            badgeColor: palette.featureBadgeText,
+            background: palette.feature,
+            borderColor: palette.highlight,
+            borderWidth: TIER_LAYOUT.upgrade.borderWidth,
+            titleColor: "#ffffff",
+            textColor: "#ffffff",
+            mutedColor: palette.featureMuted,
+            titleSize: 26,
+            priceSize: 36,
+            imageHeight: TIER_LAYOUT.upgrade.imageHeight,
+            buttonLabel: "Reserve the upgrade",
+            buttonBackground: palette.highlight,
+            buttonColor: palette.dark,
+            buttonSize: 18,
+            incentives: { background: palette.featureDark, titleColor: palette.highlight, textColor: "#ffffff" },
+            ribbon: { label: "★ Most popular choice ★", background: palette.highlight, color: palette.dark },
+            priceBackground: palette.featureDark,
+            priceNoteColor: palette.highlight,
+            shadow: `0 12px 32px ${rgba(palette.feature, 0.35)}`,
+        },
+        hailMary: {
+            badge: "Premium option",
+            badgeBackground: palette.premiumSoft,
+            badgeColor: palette.premiumBadgeText,
+            background: "#ffffff",
+            borderColor: palette.dark,
+            borderWidth: TIER_LAYOUT.hailMary.borderWidth,
+            titleColor: palette.dark,
+            textColor: COLORS.text,
+            mutedColor: COLORS.muted,
+            titleSize: 22,
+            priceSize: 28,
+            imageHeight: TIER_LAYOUT.hailMary.imageHeight,
+            buttonLabel: "Reserve the ultimate getaway",
+            buttonBackground: palette.dark,
+            buttonColor: "#ffffff",
+            buttonSize: 16,
+            incentives: { background: palette.premiumSoft, titleColor: palette.dark, textColor: COLORS.text },
+        },
+    } satisfies Record<Tier, CardStyle>;
+}
 
-type Tier = keyof typeof CARD_STYLES;
-
-// The size a tier's photo shows at in its card: the card's full inner width
-// (inside its border) by the style's image height. Uploaded photos are cropped
-// to this shape (see libs/images.ts), since classic Outlook stretches images
-// to their width and height instead of cropping them.
-export function cardImageSize(tier: Tier): { width: number; height: number } {
-    const style = CARD_STYLES[tier];
-    return { width: CONTENT_WIDTH - style.borderWidth * 2, height: style.imageHeight };
+// The palette for a colour scheme id, or the default scheme's for an unknown one.
+function paletteFor(schemeId: string | undefined): Palette {
+    return (getColorScheme(schemeId ?? "") ?? getColorScheme(DEFAULT_COLOR_SCHEME)!).palette;
 }
 
 // How one incentive looks inside each of the three quote cards, for the
-// incentive editor's live preview. Uses the same markup as the real email.
+// incentive editor's live preview. Uses the same markup as the real email,
+// in the default colour scheme.
 export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier, string>): string {
-    const tiers = Object.keys(CARD_STYLES) as Tier[];
+    const styles = cardStyles(paletteFor(DEFAULT_COLOR_SCHEME));
+    const tiers = Object.keys(styles) as Tier[];
     const cards = tiers
         .map((tier) => {
-            const style = CARD_STYLES[tier];
+            const style = styles[tier];
             return `
             <p style="margin:0 0 6px;${FONT}font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${COLORS.muted};">${esc(labels[tier])} quote</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${style.background}" style="border:${style.borderWidth}px solid ${style.borderColor};border-radius:10px;border-collapse:separate;margin-bottom:16px;">
@@ -462,12 +450,12 @@ export function renderIncentivePreview(incentive: Incentive, labels: Record<Tier
 </html>`;
 }
 
-function footer(agent: Agent): string {
+function footer(agent: Agent, palette: Palette): string {
     return `
     <tr>
-        <td bgcolor="${COLORS.paleBlue}" style="padding:24px;border-top:1px solid ${COLORS.border};${FONT}font-size:14px;line-height:22px;color:${COLORS.text};" align="center">
+        <td bgcolor="${palette.accentSoft}" style="padding:24px;border-top:1px solid ${COLORS.border};${FONT}font-size:14px;line-height:22px;color:${COLORS.text};" align="center">
             Questions? Reply to this email or call me at
-            <strong style="color:${COLORS.navy};">${esc(agent.phone)}</strong>.<br>
+            <strong style="color:${palette.dark};">${esc(agent.phone)}</strong>.<br>
             <span style="color:${COLORS.muted};">${esc(agent.name)} · Odenza Vacations · Agent #${esc(agent.agentNum)}</span>
             <p style="margin:16px 0 0;font-size:11px;line-height:16px;color:${COLORS.muted};">
                 Placeholder for any footer information
@@ -493,11 +481,15 @@ const RESPONSIVE_CSS = `
                 .pad { padding-left: 16px !important; padding-right: 16px !important; }
             }`;
 
+// `colorScheme` is a colour scheme id from libs/color-schemes.ts; it sets the email's colours.
+// The pictures come with the data (heroSrc and each layer's imageUrl).
 export function renderQuoteEmail(
     data: QuoteEmailData,
-    options: { logoSrc: string; heroSrc?: string; baseUrl?: string },
+    options: { logoSrc: string; heroSrc?: string; baseUrl?: string; colorScheme?: string },
 ): string {
     const { baseUrl } = options;
+    const palette = paletteFor(options.colorScheme);
+    const styles = cardStyles(palette);
     const logoSrc = imageUrl(options.logoSrc, baseUrl);
     const heroSrc = options.heroSrc && imageUrl(options.heroSrc, baseUrl);
     data = resolveImages(data, baseUrl);
@@ -523,16 +515,16 @@ export function renderQuoteEmail(
             <tr>
                 <td align="center" style="padding:24px 0;">
                     <table class="container" role="presentation" width="${EMAIL_WIDTH}" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:${EMAIL_WIDTH}px;">
-                        ${header(data.agent, logoSrc)}
-                        ${intro(data.guestName, heroSrc)}
+                        ${header(data.agent, logoSrc, palette)}
+                        ${intro(data.guestName, heroSrc, palette)}
                         ${spacer(24)}
-                        ${quoteCard(data.promo, CARD_STYLES.promo)}
+                        ${quoteCard(data.promo, styles.promo)}
                         ${spacer(24)}
-                        ${quoteCard(data.upgrade, CARD_STYLES.upgrade, upgradeNote(data.promo.price, data.upgrade.price))}
+                        ${quoteCard(data.upgrade, styles.upgrade, upgradeNote(data.promo.price, data.upgrade.price))}
                         ${spacer(24)}
-                        ${quoteCard(data.hailMary, CARD_STYLES.hailMary)}
+                        ${quoteCard(data.hailMary, styles.hailMary)}
                         ${spacer(32)}
-                        ${footer(data.agent)}
+                        ${footer(data.agent, palette)}
                     </table>
                 </td>
             </tr>

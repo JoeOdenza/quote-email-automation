@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Quote Emails",
+  title: "Odenza Quote Email Templater",
   description: "Build and keep quote emails for guests",
 };
 
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-zinc-100 font-sans text-zinc-900">
         <header className="bg-[#14304f]">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <span className="text-base font-semibold text-white">Quote Emails</span>
+            <span className="text-base font-semibold text-white">Odenza Quote Email Templater</span>
             <div className="flex flex-wrap items-center gap-4">
               <NavTabs />
               <Suspense fallback={null}>

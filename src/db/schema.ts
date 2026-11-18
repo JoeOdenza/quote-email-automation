@@ -119,13 +119,37 @@ export const quoteLayer = sqliteTable(
     ],
 );
 
-// Images uploaded from the app (e.g. email banners), served at /uploads/<id>.
+// Images uploaded from the app (theme pictures and incentive icons), served
+// at /uploads/<id>.
 // Stored in the database so they keep working after a rebuild or redeploy.
 export const upload = sqliteTable("upload", {
     id: text("id").primaryKey(),
     contentType: text("content_type").notNull(),
     data: blob("data", { mode: "buffer" }).notNull(),
     createdAt: createdAt(),
+});
+
+// An email theme, shared by everyone: a name, a preset colour scheme
+// (libs/color-schemes.ts) and its four pictures, each an upload
+// ("/uploads/<id>"). Replacing a picture stores a new upload, so emails
+// already made keep the pictures they were made with.
+export const theme = sqliteTable("theme", {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull().unique(),
+    colorScheme: text("color_scheme").notNull(),
+    bannerSrc: text("banner_src").notNull(),
+    baseSrc: text("base_src").notNull(),
+    upgradeSrc: text("upgrade_src").notNull(),
+    premiumSrc: text("premium_src").notNull(),
+    // Retired themes are no longer offered on the quote form.
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    // Who made it, for reference only: everyone can use and edit every theme.
+    createdBy: text("created_by").references(() => microsoftAccount.id),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(sql`(unixepoch())`)
+        .$onUpdate(() => new Date()),
 });
 
 // The catalog: one row per kind of incentive ('travel', 'hotel', ...).

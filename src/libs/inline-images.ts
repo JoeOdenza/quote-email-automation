@@ -9,7 +9,7 @@ import { stripBasePath } from "./base-path";
 import { appUrl } from "./microsoft";
 
 // Saved emails link their images to this app (e.g. http://localhost:3000/
-// images/hero.jpg), which guests can't reach while the app runs locally.
+// images/hero-banner.jpg), which guests can't reach while the app runs locally.
 // Before an email goes to Outlook, each of the app's own images is attached
 // to the message and the <img> pointed at the attachment ("cid:..."), so the
 // images travel with the email. Images hosted elsewhere (e.g. placeholder

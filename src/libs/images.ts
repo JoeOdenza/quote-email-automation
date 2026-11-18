@@ -1,47 +1,25 @@
 import "server-only";
 import sharp from "sharp";
 import { ICON_SIZE } from "./incentives";
-import { EMAIL_WIDTH, HERO_HEIGHT, cardImageSize } from "./render";
-import type { QuoteType } from "./tiers";
+import { themeImageSize, type ThemeImageSlot } from "./themes";
 
 // Uploaded images are reshaped here, on the server, because email clients
 // like Outlook ignore CSS cropping: each image has to arrive at exactly the
 // size and shape it's shown at. Each function returns null if the file isn't
 // a readable image.
 
-// The banner is stored at twice the size it shows at in the email (720 × 200),
-// so it stays sharp on high-density screens.
-export const BANNER_WIDTH = EMAIL_WIDTH * 2;
-export const BANNER_HEIGHT = HERO_HEIGHT * 2;
-
-// Turns an uploaded photo into a 1440 × 400 JPEG.
-export async function prepareBanner(file: File): Promise<Buffer | null> {
+// Turns an uploaded photo into a JPEG for one of a theme's pictures, cropped
+// to that picture's shape at twice its size in the email (e.g. 1440 × 400 for
+// the 720 × 200 banner), keeping the most eye-catching part in frame. That
+// keeps each one around 100–200KB, so the email stays well under Outlook's
+// size limit.
+export async function prepareThemeImage(file: File, slot: ThemeImageSlot): Promise<Buffer | null> {
+    const { width, height } = themeImageSize(slot);
     try {
         return await sharp(Buffer.from(await file.arrayBuffer()))
             .rotate() // apply the phone's orientation tag before cropping
-            .resize(BANNER_WIDTH, BANNER_HEIGHT, {
-                fit: "cover", // fill the frame, cropping the overflow
-                position: "attention", // keep the most eye-catching part in frame
-            })
-            .flatten({ background: "#ffffff" }) // JPEG has no transparency
-            .jpeg({ quality: 82, mozjpeg: true })
-            .toBuffer();
-    } catch {
-        return null;
-    }
-}
-
-// Turns an uploaded photo into a JPEG for one tier's card, cropped to that
-// card's shape at twice its size in the email (e.g. 1300 × 480 for a 650 × 240
-// photo). That keeps each one around 100–200KB, so all the email's images
-// stay well under Outlook's size limit.
-export async function prepareCardImage(file: File, tier: QuoteType): Promise<Buffer | null> {
-    const { width, height } = cardImageSize(tier);
-    try {
-        return await sharp(Buffer.from(await file.arrayBuffer()))
-            .rotate()
             .resize(width * 2, height * 2, { fit: "cover", position: "attention" })
-            .flatten({ background: "#ffffff" })
+            .flatten({ background: "#ffffff" }) // JPEG has no transparency
             .jpeg({ quality: 80, mozjpeg: true })
             .toBuffer();
     } catch {

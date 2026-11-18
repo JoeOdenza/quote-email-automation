@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from ".";
-import { agent, email, guest, incentive, incentiveType, quoteLayer } from "./schema";
+import { agent, email, guest, incentive, incentiveType, quoteLayer, theme } from "./schema";
 import { requireAccount } from "@/libs/session";
 import { quoteTypes } from "@/libs/tiers";
 
@@ -126,5 +126,23 @@ export async function getIncentiveType(id: string) {
         .leftJoin(incentive, eq(incentive.incentiveTypeId, incentiveType.id))
         .where(eq(incentiveType.id, id))
         .groupBy(incentiveType.id);
+    return row ?? null;
+}
+
+// Themes are shared by everyone. These are the ones offered on the quote form.
+export async function listActiveThemes() {
+    await requireAccount();
+    return db.select().from(theme).where(eq(theme.active, true)).orderBy(asc(theme.name));
+}
+
+// Every theme, active first, for the Themes page.
+export async function listAllThemes() {
+    await requireAccount();
+    return db.select().from(theme).orderBy(desc(theme.active), asc(theme.name));
+}
+
+export async function getTheme(id: number) {
+    await requireAccount();
+    const [row] = await db.select().from(theme).where(eq(theme.id, id));
     return row ?? null;
 }

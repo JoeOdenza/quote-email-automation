@@ -12,8 +12,7 @@ const nextConfig: NextConfig = {
   experimental: {
     agentFeedback: true,
     serverActions: {
-      // Room for four photo uploads (a banner plus one per tier, 10MB each
-      // at most, checked in the action) and the rest of the form.
+      // Room for a theme's four photos (10MB max each, checked in the action).
       bodySizeLimit: "42mb",
     },
   },

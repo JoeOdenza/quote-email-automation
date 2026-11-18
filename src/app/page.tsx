@@ -1,14 +1,15 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { getAgent, listIncentiveTypes } from "@/db/queries";
+import { getAgent, listActiveThemes, listIncentiveTypes } from "@/db/queries";
 import { QuoteForm } from "./quote-form";
 
 async function QuoteFormLoader() {
     await connection(); // read the database per request, never at build time
-    const [incentives, agent] = await Promise.all([listIncentiveTypes(), getAgent()]);
+    const [incentives, themes, agent] = await Promise.all([listIncentiveTypes(), listActiveThemes(), getAgent()]);
     return (
         <QuoteForm
             incentives={incentives.map(({ id, title, description, code }) => ({ id, title, description, code }))}
+            themes={themes.map(({ id, name, colorScheme, bannerSrc }) => ({ id, name, colorScheme, bannerSrc }))}
             hasAgent={agent !== null}
         />
     );

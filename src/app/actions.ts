@@ -1,14 +1,14 @@
 "use server";
 
 import { randomInt, randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { refresh, revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { getAgent, getEmail } from "@/db/queries";
-import { agent, email, guest, incentive, incentiveType, quoteLayer, upload } from "@/db/schema";
-import { prepareBanner, prepareCardImage, prepareIcon } from "@/libs/images";
+import { getAgent, getEmail, getTheme } from "@/db/queries";
+import { agent, email, guest, incentive, incentiveType, quoteLayer, theme, upload } from "@/db/schema";
+import { prepareIcon, prepareThemeImage } from "@/libs/images";
 import {
     CODE_MAX,
     DESCRIPTION_MAX,
@@ -22,14 +22,21 @@ import { unownedAgentWithNumber } from "@/libs/agent-owner";
 import { appUrl, createDraft, MicrosoftAuthError } from "@/libs/microsoft";
 import { QUOTE_EMAIL_SUBJECT, renderQuoteEmail } from "@/libs/render";
 import { currentAccount, endSession, requireAccount } from "@/libs/session";
+import { getColorScheme } from "@/libs/color-schemes";
+import {
+    THEME_NAME_MAX,
+    themeImageLabels,
+    themeImageMaxBytes,
+    themeImageMaxLabel,
+    themeImageSlots,
+    themeImageTypes,
+    type ThemeImageSlot,
+} from "@/libs/themes";
 import {
     currencies,
-    heroSrc as defaultHeroSrc,
-    photoImageMaxBytes,
-    photoImageMaxLabel,
-    photoImageTypes,
     logoSrc,
     quoteTypes,
+    tierImageSlots,
     tierLabels,
     tierPlaceholders,
     type Currency,
@@ -95,87 +102,57 @@ function uploadedFile(formData: FormData, name: string): File | null {
     return value instanceof File && value.size > 0 ? value : null;
 }
 
-type Upload = { id: string; contentType: string; data: Buffer };
-
-// Checks and reshapes an optional photo upload. Returns null when none was
-// chosen, an Upload ready to store, or an error message for the form.
-async function photoUpload(
-    formData: FormData,
-    name: string,
-    label: string,
-    prepare: (file: File) => Promise<Buffer | null>,
-): Promise<Upload | null | { error: string }> {
-    const file = uploadedFile(formData, name);
-    if (!file) return null;
-    if (!(photoImageTypes as readonly string[]).includes(file.type)) {
-        return { error: `The ${label} must be a JPG, PNG, GIF or WebP. Choose the file again.` };
-    }
-    if (file.size > photoImageMaxBytes) {
-        return { error: `The ${label} must be ${photoImageMaxLabel} or smaller. Choose a smaller file.` };
-    }
-    const data = await prepare(file);
-    if (!data) return { error: `The ${label} couldn't be read. Try a different file.` };
-    return { id: randomUUID(), contentType: "image/jpeg", data };
-}
-
-export async function createQuoteEmail(_prev: FormState, formData: FormData): Promise<FormState> {
-    await requireAccount();
-    const values = formValues(formData);
-    const fail = (error: string): FormState => ({ error, values });
+// Checks the quote form and renders its email, without saving anything.
+// Used for the preview and again when the email is saved.
+async function buildQuoteEmail(formData: FormData) {
+    const failed = (error: string) => ({ error }) as const;
 
     const currentAgent = await getAgent();
-    if (!currentAgent) return fail("Add your agent details on the Settings page first.");
+    if (!currentAgent) return failed("Add your agent details on the Settings page first.");
 
     const guestName = text(formData, "guestName");
     const guestEmail = text(formData, "guestEmail");
     const guestProfileNum = text(formData, "guestProfileNum");
-    if (!guestName) return fail("Enter the guest's name.");
-    if (!isEmail(guestEmail)) return fail("Enter a valid guest email.");
-    if (!isProfileNum(guestProfileNum)) return fail("The profile number must be exactly 6 digits.");
+    if (!guestName) return failed("Enter the guest's name.");
+    if (!isEmail(guestEmail)) return failed("Enter a valid guest email.");
+    if (!isProfileNum(guestProfileNum)) return failed("The profile number must be exactly 6 digits.");
 
-    // The uploads' ids are picked up front so the email can link to them; the
-    // rows themselves are written in the same transaction as the email.
-    const heroUpload = await photoUpload(formData, "heroImage", "banner image", prepareBanner);
-    if (heroUpload && "error" in heroUpload) return fail(heroUpload.error);
-
-    const tierUploads = {} as Record<QuoteType, Upload | null>;
-    for (const type of quoteTypes) {
-        const result = await photoUpload(formData, `${type}.image`, `${tierLabels[type]} photo`, (file) =>
-            prepareCardImage(file, type),
-        );
-        if (result && "error" in result) return fail(result.error);
-        tierUploads[type] = result;
-    }
-    // Each tier shows its uploaded photo, or the default one for that tier.
-    const tierImageSrc = (type: QuoteType) => {
-        const tierUpload = tierUploads[type];
-        return tierUpload ? `/uploads/${tierUpload.id}` : tierPlaceholders[type].imageSrc;
+    // The theme sets the banner, each tier's picture and the email's colours.
+    const themeId = Number(text(formData, "theme"));
+    const chosenTheme = Number.isInteger(themeId) && themeId > 0 ? await getTheme(themeId) : null;
+    if (!chosenTheme || !chosenTheme.active) return failed("Pick a theme for the email.");
+    const pictures: Record<ThemeImageSlot, string> = {
+        banner: chosenTheme.bannerSrc,
+        base: chosenTheme.baseSrc,
+        upgrade: chosenTheme.upgradeSrc,
+        premium: chosenTheme.premiumSrc,
     };
+    const tierImageSrc = (type: QuoteType) => pictures[tierImageSlots[type]];
 
     const tiers = {} as Record<QuoteType, TierInput>;
     for (const type of quoteTypes) {
         const label = tierLabels[type];
         const priceCents = parsePriceCents(text(formData, `${type}.price`));
         if (priceCents === null) {
-            return fail(`Enter the ${label} price as a dollar amount, e.g. 1299 or 1,299.50 (up to two decimals).`);
+            return failed(`Enter the ${label} price as a dollar amount, e.g. 1299 or 1,299.50 (up to two decimals).`);
         }
         const currency = text(formData, `${type}.currency`) as Currency;
-        if (!currencies.includes(currency)) return fail(`Pick a currency for the ${label} quote.`);
+        if (!currencies.includes(currency)) return failed(`Pick a currency for the ${label} quote.`);
         const title = text(formData, `${type}.title`);
         const description = text(formData, `${type}.description`);
-        if (!title) return fail(`Enter a title for the ${label} quote.`);
+        if (!title) return failed(`Enter a title for the ${label} quote.`);
 
         const nightsText = text(formData, `${type}.nights`);
         const nights = Number(nightsText);
         if (!/^\d+$/.test(nightsText) || nights < 1 || nights > MAX_NIGHTS) {
-            return fail(`Enter the number of nights for the ${label} quote (1–${MAX_NIGHTS}).`);
+            return failed(`Enter the number of nights for the ${label} quote (1–${MAX_NIGHTS}).`);
         }
         const checkIn = text(formData, `${type}.checkIn`);
         const checkOut = text(formData, `${type}.checkOut`);
         if (!isIsoDate(checkIn) || !isIsoDate(checkOut) || checkOut <= checkIn) {
-            return fail(`Pick the check-in and check-out dates for the ${label} quote.`);
+            return failed(`Pick the check-in and check-out dates for the ${label} quote.`);
         }
-        if (!description) return fail(`Enter the accommodation description for the ${label} quote.`);
+        if (!description) return failed(`Enter the accommodation description for the ${label} quote.`);
 
         const incentiveIds = [...new Set(formData.getAll(`${type}.incentives`).map(String))];
         tiers[type] = {
@@ -198,7 +175,7 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
               .from(incentiveType)
               .where(and(inArray(incentiveType.id, allIds), eq(incentiveType.active, true)))
         : [];
-    if (catalog.length !== allIds.length) return fail("One of the selected incentives no longer exists.");
+    if (catalog.length !== allIds.length) return failed("One of the selected incentives no longer exists.");
     const byId = new Map(catalog.map((c) => [c.id, c]));
 
     const layer = (type: QuoteType): QuoteLayer => ({
@@ -228,16 +205,36 @@ export async function createQuoteEmail(_prev: FormState, formData: FormData): Pr
         upgrade: layer("upgrade"),
         hailMary: layer("hailMary"),
     };
-    const heroSrc = heroUpload ? `/uploads/${heroUpload.id}` : defaultHeroSrc;
-    const html = renderQuoteEmail(data, { logoSrc, heroSrc, baseUrl: await siteOrigin() });
+    const heroSrc = pictures.banner;
+    const html = renderQuoteEmail(data, {
+        logoSrc,
+        heroSrc,
+        baseUrl: await siteOrigin(),
+        colorScheme: chosenTheme.colorScheme,
+    });
 
-    const uploads = [heroUpload, ...quoteTypes.map((type) => tierUploads[type])].filter(
-        (u): u is Upload => u !== null,
-    );
+    return { currentAgent, guestName, guestEmail, guestProfileNum, tiers, tierImageSrc, heroSrc, html };
+}
+
+export type PreviewState = { error?: string; html?: string };
+
+// Shows the email for checking before it's saved. Nothing is stored, so an
+// agent can go back and change it, or leave, without leaving a record behind.
+export async function previewQuoteEmail(_prev: PreviewState, formData: FormData): Promise<PreviewState> {
+    await requireAccount();
+    const built = await buildQuoteEmail(formData);
+    if ("error" in built) return { error: built.error };
+    return { html: built.html };
+}
+
+// Saves the email (after the preview) and opens it under Past emails.
+export async function createQuoteEmail(_prev: FormState, formData: FormData): Promise<FormState> {
+    await requireAccount();
+    const built = await buildQuoteEmail(formData);
+    if ("error" in built) return { error: built.error };
+    const { currentAgent, guestName, guestEmail, guestProfileNum, tiers, tierImageSrc, heroSrc, html } = built;
 
     const emailId = await db.transaction(async (tx) => {
-        if (uploads.length) await tx.insert(upload).values(uploads);
-
         // Match on profile number so the same guest isn't stored twice.
         const [g] = await tx
             .insert(guest)
@@ -407,6 +404,93 @@ export async function saveIncentive(_prev: FormState, formData: FormData): Promi
     revalidatePath("/incentives", "layout");
     revalidatePath("/");
     redirect("/incentives");
+}
+
+// The column each of a theme's pictures is stored in.
+const themeImageColumns = {
+    banner: "bannerSrc",
+    base: "baseSrc",
+    upgrade: "upgradeSrc",
+    premium: "premiumSrc",
+} as const satisfies Record<ThemeImageSlot, keyof typeof theme.$inferInsert>;
+
+// Adds a theme (no "id" field; all four pictures required) or edits one ("id"
+// set; any picture left empty is kept). Themes are shared by everyone. A
+// replaced picture is stored as a new upload, so emails already made keep
+// showing the old one.
+export async function saveTheme(_prev: FormState, formData: FormData): Promise<FormState> {
+    const account = await requireAccount();
+    const values = formValues(formData);
+    const fail = (error: string): FormState => ({ error, values });
+
+    const id = text(formData, "id") ? Number(text(formData, "id")) : null;
+    const name = text(formData, "name");
+    const colorScheme = text(formData, "colorScheme");
+    const active = id ? formData.get("active") === "on" : true;
+
+    if (!name) return fail("Enter a name for the theme.");
+    if (name.length > THEME_NAME_MAX) return fail(`Keep the name to ${THEME_NAME_MAX} characters or fewer.`);
+    if (!getColorScheme(colorScheme)) return fail("Pick a colour scheme.");
+
+    const existing = id ? await getTheme(id) : null;
+    if (id && !existing) return fail("This theme no longer exists.");
+
+    const sameName = await db
+        .select({ id: theme.id })
+        .from(theme)
+        .where(sql`lower(${theme.name}) = lower(${name})`);
+    if (sameName.some((row) => row.id !== id)) return fail("Another theme already has that name.");
+
+    const uploads: { id: string; contentType: string; data: Buffer }[] = [];
+    const pictures: Partial<Record<(typeof themeImageColumns)[ThemeImageSlot], string>> = {};
+    for (const slot of themeImageSlots) {
+        const label = themeImageLabels[slot].toLowerCase();
+        const file = uploadedFile(formData, `image.${slot}`);
+        if (!file) {
+            if (!existing) return fail(`Choose a picture for the ${label}. Every theme needs all four.`);
+            continue;
+        }
+        if (!(themeImageTypes as readonly string[]).includes(file.type)) {
+            return fail(`The ${label} must be a JPG, PNG, GIF or WebP. Choose a different file.`);
+        }
+        if (file.size > themeImageMaxBytes) {
+            return fail(`The ${label} must be ${themeImageMaxLabel} or smaller. Choose a different file.`);
+        }
+        const data = await prepareThemeImage(file, slot);
+        if (!data) return fail(`The ${label} couldn't be read as a picture. Choose a different file.`);
+        const uploadId = randomUUID();
+        uploads.push({ id: uploadId, contentType: "image/jpeg", data });
+        pictures[themeImageColumns[slot]] = `/uploads/${uploadId}`;
+    }
+
+    try {
+        await db.transaction(async (tx) => {
+            if (uploads.length) await tx.insert(upload).values(uploads);
+            if (existing) {
+                await tx
+                    .update(theme)
+                    .set({ name, colorScheme, active, ...pictures })
+                    .where(eq(theme.id, existing.id));
+            } else {
+                await tx.insert(theme).values({
+                    name,
+                    colorScheme,
+                    bannerSrc: pictures.bannerSrc!,
+                    baseSrc: pictures.baseSrc!,
+                    upgradeSrc: pictures.upgradeSrc!,
+                    premiumSrc: pictures.premiumSrc!,
+                    createdBy: account.id,
+                });
+            }
+        });
+    } catch (err) {
+        if (String(err).includes("UNIQUE")) return fail("Another theme already has that name.");
+        throw err;
+    }
+
+    revalidatePath("/themes", "layout");
+    revalidatePath("/");
+    redirect("/themes");
 }
 
 export type DraftState = { error?: string; needsSignIn?: boolean };
