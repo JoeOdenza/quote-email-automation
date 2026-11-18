@@ -31,8 +31,8 @@ function ThemePicker({ themes }: { themes: ThemeOption[] }) {
     const chosen = themes.find((theme) => String(theme.id) === id);
     const palette = chosen && getColorScheme(chosen.colorScheme)?.palette;
     return (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="flex flex-col gap-3 sm:w-64">
+        <div className="flex flex-col gap-4 sm:grid sm:grid-cols-[16rem_minmax(0,1fr)]">
+            <div className="flex flex-col gap-3">
                 <Field label="Theme" hint="Sets the banner, the three quote pictures and the email's colours.">
                     <select name="theme" value={id} onChange={(e) => setId(e.target.value)} className={inputClass}>
                         {themes.map((theme) => (
@@ -57,7 +57,7 @@ function ThemePicker({ themes }: { themes: ThemeOption[] }) {
                     alt=""
                     width={720}
                     height={200}
-                    className="aspect-[18/5] w-full rounded-md border border-zinc-200 object-cover sm:max-w-md"
+                    className="aspect-[18/5] w-full rounded-md border border-zinc-200 object-cover sm:aspect-auto sm:h-0 sm:min-h-full sm:max-w-[31rem] sm:justify-self-center"
                 />
             )}
         </div>

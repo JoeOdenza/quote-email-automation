@@ -2,16 +2,10 @@
 
 import Link from "next/link";
 import { useActionState, useState, type ChangeEvent } from "react";
-import { saveIncentive, type FormState } from "../actions";
+import { deleteIncentive, saveIncentive, setIncentiveActive, type FormState } from "../actions";
+import { DeleteControl, RetireButton, RetiredNotice } from "../ui/manage-buttons";
 import { Field, FormMessage, Input, Section, inputClass, primaryButton } from "../ui/form";
-import {
-    CODE_MAX,
-    DESCRIPTION_MAX,
-    ICON_SIZE,
-    TITLE_MAX,
-    iconImageTypes,
-    placeholderIcon,
-} from "@/libs/incentives";
+import { CODE_MAX, DESCRIPTION_MAX, ICON_SIZE, TITLE_MAX, iconImageTypes, placeholderIcon } from "@/libs/incentives";
 import { renderIncentivePreview } from "@/libs/render";
 import { tierLabels } from "@/libs/tiers";
 
@@ -34,12 +28,30 @@ async function squareIcon(file: File): Promise<string> {
     canvas.width = canvas.height = ICON_SIZE;
     canvas
         .getContext("2d")!
-        .drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, ICON_SIZE, ICON_SIZE);
+        .drawImage(
+            bitmap,
+            (bitmap.width - side) / 2,
+            (bitmap.height - side) / 2,
+            side,
+            side,
+            0,
+            0,
+            ICON_SIZE,
+            ICON_SIZE,
+        );
     bitmap.close();
     return canvas.toDataURL("image/png");
 }
 
-function Fields({ incentive, state, pending }: { incentive: IncentiveValues | null; state: FormState; pending: boolean }) {
+function Fields({
+    incentive,
+    state,
+    pending,
+}: {
+    incentive: IncentiveValues | null;
+    state: FormState;
+    pending: boolean;
+}) {
     const submitted = (name: string) => {
         const value = state.values?.[name];
         return typeof value === "string" ? value : undefined;
@@ -99,7 +111,10 @@ function Fields({ incentive, state, pending }: { incentive: IncentiveValues | nu
                                 className={inputClass}
                             />
                         </Field>
-                        <Field label="Internal code" hint="e.g. DCOGC. Agents see it on the quote form; guests never do.">
+                        <Field
+                            label="Internal code"
+                            hint="e.g. DCOGC. Agents see it on the quote form; guests never do."
+                        >
                             <input
                                 name="code"
                                 maxLength={CODE_MAX}
@@ -126,42 +141,52 @@ function Fields({ incentive, state, pending }: { incentive: IncentiveValues | nu
                             />
                         </Field>
                         {iconError && <p className="text-xs text-red-700">{iconError}</p>}
-                        {incentive && (
-                            <label className="flex cursor-pointer items-start gap-2.5">
-                                <input
-                                    type="checkbox"
-                                    name="active"
-                                    defaultChecked={state.values ? state.values.active === "on" : incentive.active}
-                                    className="mt-0.5 size-4 accent-[#0045a5]"
-                                />
-                                <span className="text-sm">
-                                    <span className="font-medium text-zinc-900">Offer on new quotes</span>
-                                    <span className="block text-xs text-zinc-500">
-                                        Untick to retire it. Emails that already include it aren&apos;t affected.
-                                    </span>
-                                </span>
-                            </label>
-                        )}
                     </div>
                 </Section>
 
                 {incentive && incentive.issued > 0 && (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                        Issued {incentive.issued} {incentive.issued === 1 ? "time" : "times"}. Emails already sent won&apos;t
-                        change, but their records under Past emails show the current title. To change what the offer
-                        actually is, retire this one and add a new incentive instead.
+                        Issued {incentive.issued} {incentive.issued === 1 ? "time" : "times"}. Emails already sent
+                        won&apos;t change, but their records under Past emails show the current title. To change what
+                        the offer actually is, retire this one and add a new incentive instead.
                     </p>
                 )}
 
                 <FormMessage error={state.error} />
 
-                <div className="flex items-center gap-3">
+                {incentive && !incentive.active && (
+                    <RetiredNotice>
+                        Not offered on new quotes. Emails that already include it aren&apos;t affected.
+                    </RetiredNotice>
+                )}
+
+                <div className="flex items-start gap-3">
                     <button type="submit" disabled={pending} className={primaryButton}>
                         {pending ? "Saving…" : incentive ? "Save changes" : "Add incentive"}
                     </button>
-                    <Link href="/incentives" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">
+                    {incentive && (
+                        <RetireButton
+                            active={incentive.active}
+                            onChange={(active) => setIncentiveActive(incentive.id, active)}
+                        />
+                    )}
+                    <Link href="/incentives" className="py-2.5 text-sm font-medium text-zinc-600 hover:text-zinc-900">
                         Cancel
                     </Link>
+                    {incentive && (
+                        <div className="ml-auto">
+                            <DeleteControl
+                                itemName={incentive.title}
+                                warning="The incentive is removed for everyone and can't be added to new quotes."
+                                blockedReason={
+                                    incentive.issued > 0
+                                        ? "Issued incentives can only be retired: guests hold their codes."
+                                        : undefined
+                                }
+                                onDelete={() => deleteIncentive(incentive.id)}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 

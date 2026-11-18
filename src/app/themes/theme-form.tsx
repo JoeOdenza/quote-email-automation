@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { startTransition, useActionState, useState, type ChangeEvent, type FormEvent } from "react";
-import { saveTheme, type FormState } from "../actions";
+import { deleteTheme, saveTheme, setThemeActive, type FormState } from "../actions";
+import { DeleteControl, RetireButton, RetiredNotice } from "../ui/manage-buttons";
 import { Field, FormMessage, Input, Section, primaryButton } from "../ui/form";
 import { PreviewFrame } from "../ui/preview-frame";
 import { withBasePath } from "@/libs/base-path";
@@ -182,22 +183,6 @@ export function ThemeForm({ theme }: { theme: ThemeValues | null }) {
                             onChange={(e) => setName(e.target.value)}
                         />
                     </Field>
-                    {theme && (
-                        <label className="mt-4 flex cursor-pointer items-start gap-2.5">
-                            <input
-                                type="checkbox"
-                                name="active"
-                                defaultChecked={theme.active}
-                                className="mt-0.5 size-4 accent-[#0045a5]"
-                            />
-                            <span className="text-sm">
-                                <span className="font-medium text-zinc-900">Offer on new quotes</span>
-                                <span className="block text-xs text-zinc-500">
-                                    Untick to retire it. Emails already made with it aren&apos;t affected.
-                                </span>
-                            </span>
-                        </label>
-                    )}
                 </Section>
 
                 <Section title="Colour scheme">
@@ -221,7 +206,10 @@ export function ThemeForm({ theme }: { theme: ThemeValues | null }) {
                                         {option.name}
                                     </span>
                                 </span>
-                                <span aria-hidden="true" className="flex h-4 overflow-hidden rounded border border-zinc-200">
+                                <span
+                                    aria-hidden="true"
+                                    className="flex h-4 overflow-hidden rounded border border-zinc-200"
+                                >
                                     {swatchColors(option.palette).map((color) => (
                                         <span key={color} className="flex-1" style={{ backgroundColor: color }} />
                                     ))}
@@ -254,13 +242,31 @@ export function ThemeForm({ theme }: { theme: ThemeValues | null }) {
 
                 <FormMessage error={state.error} />
 
-                <div className="flex items-center gap-3">
+                {theme && !theme.active && (
+                    <RetiredNotice>
+                        Not offered on new quotes. Emails already made with it aren&apos;t affected.
+                    </RetiredNotice>
+                )}
+
+                <div className="flex items-start gap-3">
                     <button type="submit" disabled={pending} className={primaryButton}>
                         {pending ? "Saving…" : theme ? "Save changes" : "Add theme"}
                     </button>
-                    <Link href="/themes" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">
+                    {theme && (
+                        <RetireButton active={theme.active} onChange={(active) => setThemeActive(theme.id, active)} />
+                    )}
+                    <Link href="/themes" className="py-2.5 text-sm font-medium text-zinc-600 hover:text-zinc-900">
                         Cancel
                     </Link>
+                    {theme && (
+                        <div className="ml-auto">
+                            <DeleteControl
+                                itemName={theme.name}
+                                warning="The theme is removed for everyone and can't be picked for new quotes. Emails already made with it keep their pictures."
+                                onDelete={() => deleteTheme(theme.id)}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 

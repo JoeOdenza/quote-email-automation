@@ -47,4 +47,4 @@ export function FormMessage({ error, success }: { error?: string; success?: stri
 }
 
 export const primaryButton =
-    "rounded-md bg-[#0045a5] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#003a8c] disabled:cursor-not-allowed disabled:opacity-60";
+    "whitespace-nowrap rounded-md bg-[#0045a5] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#003a8c] disabled:cursor-not-allowed disabled:opacity-60";

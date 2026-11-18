@@ -354,7 +354,6 @@ export async function saveIncentive(_prev: FormState, formData: FormData): Promi
     const title = text(formData, "title");
     const description = text(formData, "description");
     const code = text(formData, "code").toUpperCase();
-    const active = id ? formData.get("active") === "on" : true;
 
     if (!title) return fail("Enter a title.");
     if (title.length > TITLE_MAX) return fail(`Keep the title to ${TITLE_MAX} characters or fewer.`);
@@ -378,7 +377,7 @@ export async function saveIncentive(_prev: FormState, formData: FormData): Promi
     const iconUpload = icon && { id: randomUUID(), contentType: "image/png", data: icon };
     const iconSrc = iconUpload && `/uploads/${iconUpload.id}`;
 
-    const fields = { title, description: description || null, code: code || null, active };
+    const fields = { title, description: description || null, code: code || null };
     if (id) {
         const [existing] = await db
             .select({ id: incentiveType.id })
@@ -415,7 +414,7 @@ const themeImageColumns = {
 } as const satisfies Record<ThemeImageSlot, keyof typeof theme.$inferInsert>;
 
 // Adds a theme (no "id" field; all four pictures required) or edits one ("id"
-// set; any picture left empty is kept). Themes are shared by everyone. A
+// set; any picture left empty is kept). Retiring is separate (setThemeActive). Themes are shared by everyone. A
 // replaced picture is stored as a new upload, so emails already made keep
 // showing the old one.
 export async function saveTheme(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -426,7 +425,6 @@ export async function saveTheme(_prev: FormState, formData: FormData): Promise<F
     const id = text(formData, "id") ? Number(text(formData, "id")) : null;
     const name = text(formData, "name");
     const colorScheme = text(formData, "colorScheme");
-    const active = id ? formData.get("active") === "on" : true;
 
     if (!name) return fail("Enter a name for the theme.");
     if (name.length > THEME_NAME_MAX) return fail(`Keep the name to ${THEME_NAME_MAX} characters or fewer.`);
@@ -469,7 +467,7 @@ export async function saveTheme(_prev: FormState, formData: FormData): Promise<F
             if (existing) {
                 await tx
                     .update(theme)
-                    .set({ name, colorScheme, active, ...pictures })
+                    .set({ name, colorScheme, ...pictures })
                     .where(eq(theme.id, existing.id));
             } else {
                 await tx.insert(theme).values({
@@ -491,6 +489,80 @@ export async function saveTheme(_prev: FormState, formData: FormData): Promise<F
     revalidatePath("/themes", "layout");
     revalidatePath("/");
     redirect("/themes");
+}
+
+// Retires a theme (it stops being offered on the quote form) or brings it
+// back. Emails already made with it aren't affected.
+export async function setThemeActive(themeId: number, active: boolean): Promise<void> {
+    await requireAccount();
+    await db.update(theme).set({ active }).where(eq(theme.id, themeId));
+    revalidatePath("/themes", "layout");
+    revalidatePath("/");
+}
+
+// Deletes a theme for good. Its pictures are deleted too, except any that
+// emails already made still show, so those emails keep working.
+export async function deleteTheme(themeId: number): Promise<{ error?: string }> {
+    await requireAccount();
+    const existing = await getTheme(themeId);
+    if (!existing) return { error: "This theme no longer exists." };
+
+    const srcs = [existing.bannerSrc, existing.baseSrc, existing.upgradeSrc, existing.premiumSrc];
+    const [usedAsBanner, usedOnCards] = await Promise.all([
+        db.select({ src: email.heroSrc }).from(email).where(inArray(email.heroSrc, srcs)),
+        db.select({ src: quoteLayer.imageSrc }).from(quoteLayer).where(inArray(quoteLayer.imageSrc, srcs)),
+    ]);
+    const stillShown = new Set([...usedAsBanner, ...usedOnCards].map((row) => row.src));
+    const unusedUploadIds = srcs
+        .filter((src) => src.startsWith("/uploads/") && !stillShown.has(src))
+        .map((src) => src.slice("/uploads/".length));
+
+    await db.transaction(async (tx) => {
+        await tx.delete(theme).where(eq(theme.id, themeId));
+        if (unusedUploadIds.length) await tx.delete(upload).where(inArray(upload.id, unusedUploadIds));
+    });
+
+    revalidatePath("/themes", "layout");
+    revalidatePath("/");
+    redirect("/themes");
+}
+
+// Retires an incentive (it stops being offered on the quote form) or brings
+// it back. Emails that already include it aren't affected.
+export async function setIncentiveActive(incentiveId: string, active: boolean): Promise<void> {
+    await requireAccount();
+    await db.update(incentiveType).set({ active }).where(eq(incentiveType.id, incentiveId));
+    revalidatePath("/incentives", "layout");
+    revalidatePath("/");
+}
+
+// Deletes an incentive for good, with its uploaded icon. Only one that has
+// never been issued: issued ones have codes guests may redeem, and Past
+// emails lists them, so those can only be retired.
+export async function deleteIncentive(incentiveId: string): Promise<{ error?: string }> {
+    await requireAccount();
+    const [existing] = await db
+        .select({ srcImg: incentiveType.srcImg })
+        .from(incentiveType)
+        .where(eq(incentiveType.id, incentiveId));
+    if (!existing) return { error: "This incentive no longer exists." };
+    const [issued] = await db
+        .select({ code: incentive.incentiveCode })
+        .from(incentive)
+        .where(eq(incentive.incentiveTypeId, incentiveId))
+        .limit(1);
+    if (issued) return { error: "This incentive has been issued, so it can only be retired." };
+
+    await db.transaction(async (tx) => {
+        await tx.delete(incentiveType).where(eq(incentiveType.id, incentiveId));
+        if (existing.srcImg?.startsWith("/uploads/")) {
+            await tx.delete(upload).where(eq(upload.id, existing.srcImg.slice("/uploads/".length)));
+        }
+    });
+
+    revalidatePath("/incentives", "layout");
+    revalidatePath("/");
+    redirect("/incentives");
 }
 
 export type DraftState = { error?: string; needsSignIn?: boolean };
