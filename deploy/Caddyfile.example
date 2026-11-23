@@ -8,8 +8,9 @@
 #   /                → landing page (deploy/landing/index.html)
 #   /travel/quote/*  → this app (quote emails), port 3100
 #   /sales/mail/*    → the sales mailing app, port 3000
+#   /booking-service/* → the booking service (port TBD)
 #
-# Both apps are built with their path as a Next.js basePath and expect it in
+# The apps are built with their path as a Next.js basePath and expect it in
 # every request, so they use "handle", which passes the path on unchanged
 # ("handle_path" would strip it and break them).
 
@@ -23,6 +24,11 @@ mailing.odenzamarketing.com {
 
 	handle /sales/mail* {
 		reverse_proxy 127.0.0.1:3000
+	}
+
+	# TODO: set the booking service's real port.
+	handle /booking-service* {
+		reverse_proxy 127.0.0.1:PORT
 	}
 
 	# Everything else: the landing page. Copy deploy/landing/ to the server:
