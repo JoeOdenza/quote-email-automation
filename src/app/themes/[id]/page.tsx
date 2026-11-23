@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getTheme } from "@/db/queries";
+import { getTheme, listChanges } from "@/db/queries";
+import { ChangeHistorySection } from "../../ui/change-history";
 import { ThemeForm } from "../theme-form";
 
 async function EditTheme({ params }: { params: PageProps<"/themes/[id]">["params"] }) {
@@ -8,6 +9,7 @@ async function EditTheme({ params }: { params: PageProps<"/themes/[id]">["params
     const themeId = Number(id);
     const theme = Number.isInteger(themeId) && themeId > 0 ? await getTheme(themeId) : null;
     if (!theme) notFound();
+    const changes = await listChanges({ entityType: "theme", entityId: theme.id });
 
     return (
         <>
@@ -26,6 +28,7 @@ async function EditTheme({ params }: { params: PageProps<"/themes/[id]">["params
                     },
                 }}
             />
+            <ChangeHistorySection rows={changes} />
         </>
     );
 }

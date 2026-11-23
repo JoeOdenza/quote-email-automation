@@ -19,6 +19,7 @@ import {
 } from "@/libs/incentives";
 import { EmailTooLargeError, inlineImages } from "@/libs/inline-images";
 import { unownedAgentWithNumber } from "@/libs/agent-owner";
+import { diffFields, printChange, recordChange, type Change } from "@/libs/change-log";
 import { appUrl, createDraft, MicrosoftAuthError } from "@/libs/microsoft";
 import { QUOTE_EMAIL_SUBJECT, renderQuoteEmail } from "@/libs/render";
 import { currentAccount, endSession, requireAccount } from "@/libs/session";
@@ -346,7 +347,7 @@ async function newIncentiveId(title: string): Promise<string> {
 // changes new emails: sent emails keep the wording they were sent with, and
 // a replaced icon is stored as a new file so sent emails keep showing the old one.
 export async function saveIncentive(_prev: FormState, formData: FormData): Promise<FormState> {
-    await requireAccount();
+    const account = await requireAccount();
     const values = formValues(formData);
     const fail = (error: string): FormState => ({ error, values });
 
@@ -380,30 +381,41 @@ export async function saveIncentive(_prev: FormState, formData: FormData): Promi
     const fields = { title, description: description || null, code: code || null };
     if (id) {
         const [existing] = await db
-            .select({ id: incentiveType.id })
+            .select({ title: incentiveType.title, description: incentiveType.description, code: incentiveType.code })
             .from(incentiveType)
             .where(eq(incentiveType.id, id));
         if (!existing) return fail("This incentive no longer exists.");
 
+        const changed = diffFields(incentiveFieldLabels, existing, fields);
+        if (iconSrc) changed.push({ field: "Icon" });
+        const change: Change = { entityType: "incentive", entityId: id, entityName: title, action: "edited", fields: changed };
         await db.transaction(async (tx) => {
             if (iconUpload) await tx.insert(upload).values(iconUpload);
             await tx
                 .update(incentiveType)
                 .set({ ...fields, ...(iconSrc && { srcImg: iconSrc }) })
                 .where(eq(incentiveType.id, id));
+            // Saving without changing anything isn't logged.
+            if (changed.length) await recordChange(tx, account, change);
         });
+        if (changed.length) printChange(account, change);
     } else {
         const newId = await newIncentiveId(title);
+        const change: Change = { entityType: "incentive", entityId: newId, entityName: title, action: "created" };
         await db.transaction(async (tx) => {
             if (iconUpload) await tx.insert(upload).values(iconUpload);
             await tx.insert(incentiveType).values({ id: newId, ...fields, srcImg: iconSrc ?? placeholderIcon(title) });
+            await recordChange(tx, account, change);
         });
+        printChange(account, change);
     }
 
     revalidatePath("/incentives", "layout");
     revalidatePath("/");
     redirect("/incentives");
 }
+
+const incentiveFieldLabels = { title: "Title", description: "Description", code: "Code" };
 
 // The column each of a theme's pictures is stored in.
 const themeImageColumns = {
@@ -461,30 +473,56 @@ export async function saveTheme(_prev: FormState, formData: FormData): Promise<F
         pictures[themeImageColumns[slot]] = `/uploads/${uploadId}`;
     }
 
+    const schemeName = (schemeId: string) => getColorScheme(schemeId)?.name ?? schemeId;
+    const changed = existing
+        ? [
+              ...diffFields(
+                  { name: "Name", colorScheme: "Colour scheme" },
+                  { name: existing.name, colorScheme: schemeName(existing.colorScheme) },
+                  { name, colorScheme: schemeName(colorScheme) },
+              ),
+              ...themeImageSlots
+                  .filter((slot) => pictures[themeImageColumns[slot]])
+                  .map((slot) => ({ field: themeImageLabels[slot] })),
+          ]
+        : [];
+    let change: Change | null;
     try {
-        await db.transaction(async (tx) => {
+        change = await db.transaction(async (tx): Promise<Change | null> => {
+            let change: Change | null = null;
             if (uploads.length) await tx.insert(upload).values(uploads);
             if (existing) {
                 await tx
                     .update(theme)
                     .set({ name, colorScheme, ...pictures })
                     .where(eq(theme.id, existing.id));
+                // Saving without changing anything isn't logged.
+                if (changed.length) {
+                    change = { entityType: "theme", entityId: existing.id, entityName: name, action: "edited", fields: changed };
+                }
             } else {
-                await tx.insert(theme).values({
-                    name,
-                    colorScheme,
-                    bannerSrc: pictures.bannerSrc!,
-                    baseSrc: pictures.baseSrc!,
-                    upgradeSrc: pictures.upgradeSrc!,
-                    premiumSrc: pictures.premiumSrc!,
-                    createdBy: account.id,
-                });
+                const [created] = await tx
+                    .insert(theme)
+                    .values({
+                        name,
+                        colorScheme,
+                        bannerSrc: pictures.bannerSrc!,
+                        baseSrc: pictures.baseSrc!,
+                        upgradeSrc: pictures.upgradeSrc!,
+                        premiumSrc: pictures.premiumSrc!,
+                        createdBy: account.id,
+                    })
+                    .returning({ id: theme.id });
+                change = { entityType: "theme", entityId: created.id, entityName: name, action: "created" };
             }
+            if (change) await recordChange(tx, account, change);
+            return change;
         });
     } catch (err) {
         if (String(err).includes("UNIQUE")) return fail("Another theme already has that name.");
         throw err;
     }
+    if (change) printChange(account, change);
 
     revalidatePath("/themes", "layout");
     revalidatePath("/");
@@ -494,8 +532,21 @@ export async function saveTheme(_prev: FormState, formData: FormData): Promise<F
 // Retires a theme (it stops being offered on the quote form) or brings it
 // back. Emails already made with it aren't affected.
 export async function setThemeActive(themeId: number, active: boolean): Promise<void> {
-    await requireAccount();
-    await db.update(theme).set({ active }).where(eq(theme.id, themeId));
+    const account = await requireAccount();
+    const existing = await getTheme(themeId);
+    // Already in that state (e.g. a double click): nothing to change or log.
+    if (!existing || existing.active === active) return;
+    const change: Change = {
+        entityType: "theme",
+        entityId: themeId,
+        entityName: existing.name,
+        action: active ? "restored" : "retired",
+    };
+    await db.transaction(async (tx) => {
+        await tx.update(theme).set({ active }).where(eq(theme.id, themeId));
+        await recordChange(tx, account, change);
+    });
+    printChange(account, change);
     revalidatePath("/themes", "layout");
     revalidatePath("/");
 }
@@ -503,7 +554,7 @@ export async function setThemeActive(themeId: number, active: boolean): Promise<
 // Deletes a theme for good. Its pictures are deleted too, except any that
 // emails already made still show, so those emails keep working.
 export async function deleteTheme(themeId: number): Promise<{ error?: string }> {
-    await requireAccount();
+    const account = await requireAccount();
     const existing = await getTheme(themeId);
     if (!existing) return { error: "This theme no longer exists." };
 
@@ -517,10 +568,13 @@ export async function deleteTheme(themeId: number): Promise<{ error?: string }> 
         .filter((src) => src.startsWith("/uploads/") && !stillShown.has(src))
         .map((src) => src.slice("/uploads/".length));
 
+    const change: Change = { entityType: "theme", entityId: themeId, entityName: existing.name, action: "deleted" };
     await db.transaction(async (tx) => {
         await tx.delete(theme).where(eq(theme.id, themeId));
         if (unusedUploadIds.length) await tx.delete(upload).where(inArray(upload.id, unusedUploadIds));
+        await recordChange(tx, account, change);
     });
+    printChange(account, change);
 
     revalidatePath("/themes", "layout");
     revalidatePath("/");
@@ -530,8 +584,24 @@ export async function deleteTheme(themeId: number): Promise<{ error?: string }> 
 // Retires an incentive (it stops being offered on the quote form) or brings
 // it back. Emails that already include it aren't affected.
 export async function setIncentiveActive(incentiveId: string, active: boolean): Promise<void> {
-    await requireAccount();
-    await db.update(incentiveType).set({ active }).where(eq(incentiveType.id, incentiveId));
+    const account = await requireAccount();
+    const [existing] = await db
+        .select({ title: incentiveType.title, active: incentiveType.active })
+        .from(incentiveType)
+        .where(eq(incentiveType.id, incentiveId));
+    // Already in that state (e.g. a double click): nothing to change or log.
+    if (!existing || existing.active === active) return;
+    const change: Change = {
+        entityType: "incentive",
+        entityId: incentiveId,
+        entityName: existing.title,
+        action: active ? "restored" : "retired",
+    };
+    await db.transaction(async (tx) => {
+        await tx.update(incentiveType).set({ active }).where(eq(incentiveType.id, incentiveId));
+        await recordChange(tx, account, change);
+    });
+    printChange(account, change);
     revalidatePath("/incentives", "layout");
     revalidatePath("/");
 }
@@ -540,9 +610,9 @@ export async function setIncentiveActive(incentiveId: string, active: boolean): 
 // never been issued: issued ones have codes guests may redeem, and Past
 // emails lists them, so those can only be retired.
 export async function deleteIncentive(incentiveId: string): Promise<{ error?: string }> {
-    await requireAccount();
+    const account = await requireAccount();
     const [existing] = await db
-        .select({ srcImg: incentiveType.srcImg })
+        .select({ title: incentiveType.title, srcImg: incentiveType.srcImg })
         .from(incentiveType)
         .where(eq(incentiveType.id, incentiveId));
     if (!existing) return { error: "This incentive no longer exists." };
@@ -553,12 +623,15 @@ export async function deleteIncentive(incentiveId: string): Promise<{ error?: st
         .limit(1);
     if (issued) return { error: "This incentive has been issued, so it can only be retired." };
 
+    const change: Change = { entityType: "incentive", entityId: incentiveId, entityName: existing.title, action: "deleted" };
     await db.transaction(async (tx) => {
         await tx.delete(incentiveType).where(eq(incentiveType.id, incentiveId));
         if (existing.srcImg?.startsWith("/uploads/")) {
             await tx.delete(upload).where(eq(upload.id, existing.srcImg.slice("/uploads/".length)));
         }
+        await recordChange(tx, account, change);
     });
+    printChange(account, change);
 
     revalidatePath("/incentives", "layout");
     revalidatePath("/");

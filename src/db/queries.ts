@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from ".";
-import { agent, email, guest, incentive, incentiveType, quoteLayer, theme } from "./schema";
+import { agent, changeLog, email, guest, incentive, incentiveType, quoteLayer, theme } from "./schema";
 import { requireAccount } from "@/libs/session";
 import { quoteTypes } from "@/libs/tiers";
 
@@ -139,6 +139,20 @@ export async function listActiveThemes() {
 export async function listAllThemes() {
     await requireAccount();
     return db.select().from(theme).orderBy(desc(theme.active), asc(theme.name));
+}
+
+// Changes to incentives and themes, newest first: all of them, or one item's.
+export async function listChanges(filter?: { entityType: "incentive" | "theme"; entityId: string | number }, limit = 200) {
+    await requireAccount();
+    return db
+        .select()
+        .from(changeLog)
+        .where(
+            filter &&
+                and(eq(changeLog.entityType, filter.entityType), eq(changeLog.entityId, String(filter.entityId))),
+        )
+        .orderBy(desc(changeLog.id))
+        .limit(limit);
 }
 
 export async function getTheme(id: number) {

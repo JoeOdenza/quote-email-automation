@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getIncentiveType } from "@/db/queries";
+import { getIncentiveType, listChanges } from "@/db/queries";
+import { ChangeHistorySection } from "../../ui/change-history";
 import { IncentiveForm } from "../incentive-form";
 
 async function EditIncentive({ params }: { params: PageProps<"/incentives/[id]">["params"] }) {
     const { id } = await params;
-    const incentive = await getIncentiveType(id);
+    const [incentive, changes] = await Promise.all([
+        getIncentiveType(id),
+        listChanges({ entityType: "incentive", entityId: id }),
+    ]);
     if (!incentive) notFound();
 
     return (
@@ -22,6 +26,7 @@ async function EditIncentive({ params }: { params: PageProps<"/incentives/[id]">
                     issued: incentive.issued,
                 }}
             />
+            <ChangeHistorySection rows={changes} />
         </>
     );
 }

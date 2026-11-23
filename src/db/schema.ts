@@ -182,6 +182,30 @@ export const incentive = sqliteTable(
     (t) => [index("incentive_quote_layer_idx").on(t.quoteLayerId)],
 );
 
+// Who changed which incentive or theme, and how. Rows are only ever added.
+// The person's name and email and the item's name are copied in, so the log
+// still reads correctly after someone's account or the item itself is gone
+// (hence no foreign keys). See libs/change-log.ts.
+export const changeLog = sqliteTable(
+    "change_log",
+    {
+        id: integer("id").primaryKey({ autoIncrement: true }),
+        accountId: text("account_id").notNull(),
+        accountName: text("account_name").notNull(),
+        accountEmail: text("account_email").notNull(),
+        entityType: text("entity_type", { enum: ["incentive", "theme"] }).notNull(),
+        // incentive_type.id, or theme.id as text.
+        entityId: text("entity_id").notNull(),
+        entityName: text("entity_name").notNull(),
+        action: text("action", { enum: ["created", "edited", "retired", "restored", "deleted"] }).notNull(),
+        // For edits, a JSON array of { field, from?, to? }. A field with no
+        // from/to is a replaced picture.
+        details: text("details"),
+        createdAt: createdAt(),
+    },
+    (t) => [index("change_log_entity_idx").on(t.entityType, t.entityId)],
+);
+
 // A Microsoft account that has signed in to the app. Tokens are encrypted
 // (see libs/crypto.ts) so a copy of the database alone can't read mail.
 export const microsoftAccount = sqliteTable("microsoft_account", {
