@@ -30,11 +30,11 @@ export type ThemeValues = {
     images: Record<ThemeImageSlot, string>;
 };
 
-const imageHints: Record<ThemeImageSlot, string> = {
-    banner: "Across the top of the email. Very wide: about 3.6 : 1.",
-    base: "On the Base quote card. Wide: about 3.3 : 1.",
-    upgrade: "On the Upgrade quote card. Wide: about 2.7 : 1.",
-    premium: "On the Premium quote card. Wide: about 3 : 1.",
+const imageWhere: Record<ThemeImageSlot, string> = {
+    banner: "Across the top of the email",
+    base: "On the Base quote card",
+    upgrade: "On the Upgrade quote card",
+    premium: "On the Premium quote card",
 };
 
 // Crops the chosen photo to the shape it shows at in the email, from the
@@ -65,6 +65,7 @@ function placeholder(slot: ThemeImageSlot): string {
 
 function ImageField({
     slot,
+    number,
     current,
     preview,
     error,
@@ -72,6 +73,7 @@ function ImageField({
     onChange,
 }: {
     slot: ThemeImageSlot;
+    number: number;
     current: string | null;
     preview: string | null;
     error?: string;
@@ -81,38 +83,51 @@ function ImageField({
     const { width, height } = themeImageSize(slot);
     const shown = preview ?? (current && withBasePath(current));
     return (
-        <div className="flex flex-col gap-2">
-            <Field
-                label={current ? `Replace ${themeImageLabels[slot].toLowerCase()}` : themeImageLabels[slot]}
-                hint={current ? "Leave empty to keep the current picture." : imageHints[slot]}
+        <fieldset className="overflow-hidden rounded-md border border-zinc-300">
+            <legend className="sr-only">{themeImageLabels[slot]}</legend>
+            <div
+                aria-hidden="true"
+                className="flex items-center gap-2.5 border-b border-zinc-200 bg-[#f4f7fb] px-3 py-2"
             >
-                <input
-                    name={`image.${slot}`}
-                    type="file"
-                    required={required}
-                    accept={themeImageTypes.join(",")}
-                    onChange={onChange}
-                    className="text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-50"
-                />
-            </Field>
-            {error && <p className="text-xs text-red-700">{error}</p>}
-            {shown ? (
-                // eslint-disable-next-line @next/next/no-img-element -- local previews and uploads, shown as-is
-                <img
-                    src={shown}
-                    alt=""
-                    width={width}
-                    height={height}
-                    style={{ aspectRatio: `${width} / ${height}` }}
-                    className="w-full rounded-md border border-zinc-200 object-cover"
-                />
-            ) : (
-                <div
-                    style={{ aspectRatio: `${width} / ${height}` }}
-                    className="w-full rounded-md border border-dashed border-zinc-300 bg-zinc-50"
-                />
-            )}
-        </div>
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#0045a5] text-xs font-semibold text-white">
+                    {number}
+                </span>
+                <span className="text-sm font-semibold text-[#14304f]">{themeImageLabels[slot]}</span>
+                <span className="ml-auto text-right text-xs text-zinc-500">{imageWhere[slot]}</span>
+            </div>
+            <div className="flex flex-col gap-2 p-3">
+                <Field
+                    label={current ? "Replace picture" : "Choose picture"}
+                    hint={current ? "Leave empty to keep the current picture." : undefined}
+                >
+                    <input
+                        name={`image.${slot}`}
+                        type="file"
+                        required={required}
+                        accept={themeImageTypes.join(",")}
+                        onChange={onChange}
+                        className="text-sm text-zinc-700 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 hover:file:bg-zinc-50"
+                    />
+                </Field>
+                {error && <p className="text-xs text-red-700">{error}</p>}
+                {shown ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- local previews and uploads, shown as-is
+                    <img
+                        src={shown}
+                        alt=""
+                        width={width}
+                        height={height}
+                        style={{ aspectRatio: `${width} / ${height}` }}
+                        className="w-full rounded-md border border-zinc-200 object-cover"
+                    />
+                ) : (
+                    <div
+                        style={{ aspectRatio: `${width} / ${height}` }}
+                        className="w-full rounded-md border border-dashed border-zinc-300 bg-zinc-50"
+                    />
+                )}
+            </div>
+        </fieldset>
     );
 }
 
@@ -221,15 +236,22 @@ export function ThemeForm({ theme }: { theme: ThemeValues | null }) {
 
                 <Section title="Pictures">
                     <p className="-mt-2 mb-4 text-xs text-zinc-500">
-                        {theme
-                            ? "Emails already made keep the pictures they were made with."
-                            : `All four are required. JPG, PNG, GIF or WebP up to ${themeImageMaxLabel} each; full-size photos are fine. Each is cropped to its shape and compressed for email.`}
+                        {theme ? (
+                            "Emails already made keep the pictures they were made with."
+                        ) : (
+                            <>
+                                All four are required. JPG, PNG, GIF or WebP up to {themeImageMaxLabel} each.
+                                <br />
+                                Each is cropped to its shape and compressed for email.
+                            </>
+                        )}
                     </p>
                     <div className="flex flex-col gap-5">
-                        {themeImageSlots.map((slot) => (
+                        {themeImageSlots.map((slot, index) => (
                             <ImageField
                                 key={slot}
                                 slot={slot}
+                                number={index + 1}
                                 current={theme?.images[slot] ?? null}
                                 preview={previews[slot] ?? null}
                                 error={imageErrors[slot]}
